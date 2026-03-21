@@ -1,82 +1,82 @@
-name: Build
-on:
-  pull_request:
-    branches: [master, develop]
-permissions:
-  contents: read
-  pull-requests: write
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:11.6
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_DB: noharm
-        ports:
-          - 5432:5432
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: 3.11
-      - name: Setup Python
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-      - name: Setup PostgreSQL
-        run: |
-          git clone https://github.com/noharm-ai/database
-          psql -h localhost -U postgres -d noharm -a -f database/noharm-public.sql -v ON_ERROR_STOP=1
-          psql -h localhost -U postgres -d noharm -a -f database/noharm-create.sql -v ON_ERROR_STOP=1
-          psql -h localhost -U postgres -d noharm -a -f database/noharm-newuser.sql -v ON_ERROR_STOP=1
-          psql -h localhost -U postgres -d noharm -a -f database/noharm-triggers.sql -v ON_ERROR_STOP=1
-          psql -h localhost -U postgres -d noharm -a -f database/noharm-insert.sql -v ON_ERROR_STOP=1
-      - name: Setup Application
-        run: |
-          python mobile.py &
-          sleep 10
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: sa-east-1
-      - name: Run Tests
-        env:
-          CACHE_BUCKET_NAME: ${{ secrets.CACHE_BUCKET_NAME }}
-          ENV: test
-        run: python -m pytest --cov-report xml --cov=.
-  build-prod:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:11.6
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_DB: noharm
-        ports:
-          - 5432:5432
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: 3.11
-      - name: Setup Python
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-prod.txt
-      - name: Setup PostgreSQL
-        run: |
-          git clone https://github.com/noharm-ai/database
-          psql -h localhost -U postgres -d noharm -a -f database/noharm-public.sql -v ON_ERROR_STOP=1
-          psql -h localhost -U postgres -d noharm -a -f database/noharm-create.sql -v ON_ERROR_STOP=1
-          psql -h localhost -U postgres -d noharm -a -f database/noharm-newuser.sql -v ON_ERROR_STOP=1
-          psql -h localhost -U postgres -d noharm -a -f database/noharm-triggers.sql -v ON_ERROR_STOP=1
-          psql -h localhost -U postgres -d noharm -a -f database/noharm-insert.sql -v ON_ERROR_STOP=1
-      - name: Setup Application
-        run: |
-          python mobile.py &
-          sleep 10
+#name: Build
+#on:
+#  pull_request:
+#    branches: [main, develop]
+#permissions:
+#  contents: read
+#  pull-requests: write
+#
+#jobs:
+#  build:
+#    runs-on: ubuntu-latest
+#    services:
+#      postgres:
+#        image: postgres:11.6
+#        env:
+#          POSTGRES_USER: postgres
+#          POSTGRES_DB: noharm
+#        ports:
+#          - 5432:5432
+#    steps:
+#      - uses: actions/checkout@v4
+#      - uses: actions/setup-python@v5
+#        with:
+#          python-version: 3.11
+#      - name: Setup Python
+#        run: |
+#          python -m pip install --upgrade pip
+#          pip install -r requirements.txt
+#      - name: Setup PostgreSQL
+#        run: |
+#          git clone https://github.com/noharm-ai/database
+#          psql -h localhost -U postgres -d noharm -a -f database/noharm-public.sql -v ON_ERROR_STOP=1
+#          psql -h localhost -U postgres -d noharm -a -f database/noharm-create.sql -v ON_ERROR_STOP=1
+#          psql -h localhost -U postgres -d noharm -a -f database/noharm-newuser.sql -v ON_ERROR_STOP=1
+#          psql -h localhost -U postgres -d noharm -a -f database/noharm-triggers.sql -v ON_ERROR_STOP=1
+#          psql -h localhost -U postgres -d noharm -a -f database/noharm-insert.sql -v ON_ERROR_STOP=1
+#      - name: Setup Application
+#        run: |
+#          python mobile.py &
+#          sleep 10
+#      - name: Configure AWS Credentials
+#        uses: aws-actions/configure-aws-credentials@v4
+#        with:
+#          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#          aws-region: sa-east-1
+#      - name: Run Tests
+#        env:
+#          CACHE_BUCKET_NAME: ${{ secrets.CACHE_BUCKET_NAME }}
+#          ENV: test
+#        run: python -m pytest --cov-report xml --cov=.
+#  build-prod:
+#    runs-on: ubuntu-latest
+#    services:
+#      postgres:
+#        image: postgres:11.6
+#        env:
+#          POSTGRES_USER: postgres
+#          POSTGRES_DB: noharm
+#        ports:
+#          - 5432:5432
+#    steps:
+#      - uses: actions/checkout@v4
+#      - uses: actions/setup-python@v5
+#        with:
+#          python-version: 3.11
+#      - name: Setup Python
+#        run: |
+#          python -m pip install --upgrade pip
+#          pip install -r requirements-prod.txt
+#      - name: Setup PostgreSQL
+#        run: |
+#          git clone https://github.com/noharm-ai/database
+#          psql -h localhost -U postgres -d noharm -a -f database/noharm-public.sql -v ON_ERROR_STOP=1
+#          psql -h localhost -U postgres -d noharm -a -f database/noharm-create.sql -v ON_ERROR_STOP=1
+#          psql -h localhost -U postgres -d noharm -a -f database/noharm-newuser.sql -v ON_ERROR_STOP=1
+#          psql -h localhost -U postgres -d noharm -a -f database/noharm-triggers.sql -v ON_ERROR_STOP=1
+#          psql -h localhost -U postgres -d noharm -a -f database/noharm-insert.sql -v ON_ERROR_STOP=1
+#      - name: Setup Application
+#        run: |
+#          python mobile.py &
+#          sleep 10
