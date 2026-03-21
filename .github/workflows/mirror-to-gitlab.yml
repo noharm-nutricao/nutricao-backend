@@ -10,7 +10,6 @@ on:
 jobs:
   mirror:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
@@ -25,9 +24,11 @@ jobs:
 
       - name: Add GitLab remote
         run: |
+          git remote remove gitlab || true
           git remote add gitlab https://oauth2:${{ secrets.GITLAB_TOKEN }}@tools.ages.pucrs.br/m-dulo-de-nutri-o/nitra-backend.git
 
-      - name: Push main and develop
+      - name: Push branch
         run: |
-          git push gitlab main
-          git push gitlab develop
+          BRANCH=${GITHUB_REF#refs/heads/}
+          echo "Pushing branch $BRANCH"
+          git push gitlab $BRANCH
