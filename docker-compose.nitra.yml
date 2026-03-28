@@ -1,0 +1,67 @@
+version: "3.9"
+
+services:
+
+  api:
+    build: .
+    container_name: flask-api
+    ports:
+      - "5000:5000"
+    environment:
+      DEBUG_METRICS: "1"
+    depends_on:
+      - db
+
+  db:
+    image: postgres:16-alpine
+    container_name: nitra_db
+    environment:
+      POSTGRES_DB: noharm
+      POSTGRES_USER: postgres
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - /Users/willian/Documents/github/nitra/database:/sql
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      retries: 10
+
+  db-init:
+    image: postgres:16-alpine
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - /Users/willian/Documents/github/nitra/database:/sql
+    entrypoint: >
+      sh -c "
+      psql -h db -U postgres -d noharm -f /sql/noharm-public.sql &&
+      psql -h db -U postgres -d noharm -f /sql/noharm-create.sql &&
+      psql -h db -U postgres -d noharm -f /sql/noharm-newuser.sql &&
+      psql -h db -U postgres -d noharm -f /sql/noharm-triggers.sql &&
+      psql -h db -U postgres -d noharm -f /sql/noharm-insert.sql
+      "
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    depends_on:
+      - api
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
+volumes:
+  postgres_data:

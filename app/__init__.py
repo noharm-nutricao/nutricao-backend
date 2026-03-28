@@ -11,6 +11,7 @@ from flask import Flask
 # Import only extensions and config at module level to avoid circular imports
 from .extensions import cors, db, jwt, mail
 from .flask_config import get_config
+from prometheus_flask_exporter import PrometheusMetrics
 
 # Set timezone
 os.environ["TZ"] = "America/Sao_Paulo"
@@ -49,6 +50,8 @@ def create_app(config_name=None):
         origins=app.config["CORS_ORIGINS"],
         supports_credentials=app.config["CORS_SUPPORTS_CREDENTIALS"],
     )
+
+    PrometheusMetrics(app, path="/metrics")
 
     # Configure logging
     configure_logging()
