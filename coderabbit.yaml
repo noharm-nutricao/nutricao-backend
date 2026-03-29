@@ -1,0 +1,20 @@
+language: "pt-BR"
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+      - develop
+instructions: |
+  Este é um projeto acadêmico de módulo nutricional hospitalar.
+  Stack: Python, Flask, SQLAlchemy, PostgreSQL.
+  Siga os padrões da arquitetura em camadas: routes → services → repository → models.
+  Verifique: boas práticas Python, segurança, performance em queries SQL,
+  nomenclatura em português para variáveis de domínio clínico.
