@@ -7,6 +7,8 @@ services:
     container_name: flask-api
     ports:
       - "5000:5000"
+    env_file:
+      - .env
     environment:
       DEBUG_METRICS: "1"
     depends_on:
@@ -23,7 +25,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - /Users/willian/Documents/github/nitra/database:/sql # !!!! Adicione aqui o path para o projeto do database !!!!
+      - ${DATABASE_PATH:-/Users/willian/Documents/github/nitra/database}:/sql # path para o projeto do database
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 5s
@@ -35,7 +37,7 @@ services:
       db:
         condition: service_healthy
     volumes:
-      - /Users/willian/Documents/github/nitra/database:/sql # !!!! Adicione aqui o path para o projeto do database !!!!
+      - ${DATABASE_PATH:-/Users/willian/Documents/github/nitra/database}:/sql # !!!! Adicione aqui o path para o projeto do database !!!!
     entrypoint: >
       sh -c "
       psql -h db -U postgres -d noharm -f /sql/noharm-public.sql &&
