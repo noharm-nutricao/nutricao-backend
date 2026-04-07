@@ -61,3 +61,14 @@ def register_handlers(app):
     def get_version():
         """Get backend version."""
         return {"status": "success", "data": Config.VERSION}, status.HTTP_200_OK
+
+    from werkzeug.exceptions import HTTPException
+
+    @app.errorhandler(Exception)
+    def handle_error(e):
+
+        if isinstance(e, HTTPException):
+            return e
+
+        current_app.logger.exception(e)
+        return {"error": "internal server error"}, 500
