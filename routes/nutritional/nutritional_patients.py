@@ -13,4 +13,14 @@ app_nutritional = Blueprint("app_nutritional", __name__)
 @api_endpoint()
 @has_permission(Permission.READ_PRESCRIPTION)
 def get_patients():
-    return nutritional_patient_service.get_patients()
+    try:
+        # Chama o service que agora só retorna os dados (ou o erro)
+        data = nutritional_patient_service.get_patients()
+
+        # SUCESSO
+        return data, 200
+    except Exception as e:
+        # ERRO: Se o service der o 'raise Exception', cai aqui
+        # Retornamos a mensagem amigável com 500
+        return {"message": str(e)}, 500
+
