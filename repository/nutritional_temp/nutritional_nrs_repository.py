@@ -2,6 +2,7 @@ from typing import Optional
 
 from models.main import db
 from models.temp_nutritional import NutricionalNrs, NutricionalTriagem
+from services.temp_nutritional.nutritional_dtos import NrsScoreDTO
 
 
 def get_nrs_assessment(nratendimento: int) -> Optional[NutricionalNrs]:
@@ -45,3 +46,17 @@ def get_or_create_triagem(nratendimento: int) -> NutricionalTriagem:
     db.session.add(triagem)
     db.session.flush()
     return triagem
+
+
+def update_triagem(triagem: NutricionalTriagem, nrs_score: NrsScoreDTO) -> None:
+    triagem.nrs_nut = nrs_score.nrs_nut
+    triagem.nrs_doenca = nrs_score.nrs_doenca
+    triagem.nrs_idade = nrs_score.nrs_idade
+    triagem.nrs_total = nrs_score.nrs_total
+    triagem.nrs_completo = nrs_score.nrs_completo
+    triagem.nrs_ref_at = nrs_score.nrs_ref_at
+    triagem.calculado_at = nrs_score.calculado_at
+
+    db.session.add(triagem)
+    db.session.flush()
+    return None
