@@ -66,7 +66,7 @@ def get_or_create_triagem(nr_atendimento: int):
 
 
 def calculate_age(dt_nascimento: datetime):
-    return None
+    return datetime.now().year - dt_nascimento.year
 
 
 def update_triagem(nr_atentimento: int, triagem: NrsScoreDTO) -> None:
