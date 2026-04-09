@@ -7,18 +7,17 @@ class NutricionalNrs(db.Model):
 	__tablename__ = "nutricional_nrs"
 	__table_args__ = (
 		db.Index(
-			"demo_nutricional_nrs_atendimento_idx",
+			"nutricional_nrs_atendimento_idx",
 			"nratendimento",
 			db.text("updated_at DESC"),
 		),
-		{"schema": "demo"},
 	)
 
-	id = db.Column("id", db.BigInteger, primary_key=True, autoincrement=True)
+	id = db.Column("id", db.BigInteger, primary_key=True)
 	nratendimento = db.Column(
 		"nratendimento",
 		db.Integer,
-		db.ForeignKey("demo.pessoa.nratendimento"),
+		db.ForeignKey("pessoa.nratendimento"),
 		nullable=False,
 	)
 
@@ -41,12 +40,10 @@ class NutricionalNrs(db.Model):
 	updated_at = db.Column(
 		"updated_at",
 		db.DateTime(timezone=True),
-		nullable=False,
-		server_default=db.func.now(),
+		nullable=False
 	)
 	created_at = db.Column(
 		"created_at",
 		db.DateTime(timezone=True),
-		nullable=False,
-		server_default=db.func.now(),
+		nullable=False
 	)
