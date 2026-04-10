@@ -20,10 +20,10 @@ class Config:
     APP_DOMAIN = getenv("APP_DOMAIN") or "localhost"
     POTGRESQL_CONNECTION_STRING = (
         getenv("POTGRESQL_CONNECTION_STRING")
-        or "postgresql://postgres@localhost/noharm"
+        or "postgresql://postgres@db/noharm"
     )
     REPORT_CONNECTION_STRING = (
-        getenv("REPORT_CONNECTION_STRING") or "postgresql://postgres@localhost/noharm"
+        getenv("REPORT_CONNECTION_STRING") or "postgresql://postgres@db/noharm"
     )
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(
         minutes=int(getenv("JWT_ACCESS_TOKEN_EXPIRES", "20"))
