@@ -1,12 +1,20 @@
+from dataclasses import dataclass
+from functools import lru_cache
 from typing import Optional
 
+from requests import Session
 from sqlalchemy import and_
 
 from models.appendix import Department
 from models.main import db
 from models.prescription import Prescription
-from models.temp_nutritional import NutricionalNrs, NutricionalTriagem
-from services.temp_nutritional.nutritional_dtos import NrsScoreDTO
+from models.temp_nutritional import (
+    NutricionalCidGravidade,
+    NutricionalCidOverride,
+    NutricionalNrs,
+    NutricionalTriagem,
+)
+from services.temp_nutritional.nutritional_dtos import CidMappings, NrsScoreDTO
 
 
 def get_nrs_assessment(nratendimento: int) -> Optional[NutricionalNrs]:
@@ -82,3 +90,30 @@ def get_patient_department(nratendimento: int) -> Optional[str]:
         .first()
     )
     return row[0] if row else None
+
+
+def get_nutricional_cid_override(session: Session) -> list[tuple[str, int]]:
+    return session.query(
+        NutricionalCidOverride.prefixo3,
+        NutricionalCidOverride.score_nrs,
+    ).all()
+
+
+def get_nutricional_cid_gravidade(session: Session) -> list[tuple[str, int]]:
+    return session.query(
+        NutricionalCidGravidade.prefixo,
+        NutricionalCidGravidade.score_nrs,
+    ).all()
+
+
+def build_cid_mappings(session: Session) -> CidMappings:
+    overrides: list = get_nutricional_cid_override(session)
+    chapters: list = get_nutricional_cid_gravidade(session)
+    overrides: dict = {row[0]: row[1] for row in overrides}
+    chapters: dict = ({row[0]: row[1] for row in chapters},)
+    return CidMappings(overrides=overrides, chapters=chapters)
+
+
+@lru_cache(maxsize=1)
+def get_cid_mappings_cached() -> CidMappings:
+    return build_cid_mappings(db.session)
