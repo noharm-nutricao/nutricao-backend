@@ -1,6 +1,10 @@
 from typing import Optional
 
+from sqlalchemy import and_
+
+from models.appendix import Department
 from models.main import db
+from models.prescription import Prescription
 from models.temp_nutritional import NutricionalNrs, NutricionalTriagem
 from services.temp_nutritional.nutritional_dtos import NrsScoreDTO
 
@@ -60,3 +64,21 @@ def update_triagem(triagem: NutricionalTriagem, nrs_score: NrsScoreDTO) -> None:
     db.session.add(triagem)
     db.session.flush()
     return None
+
+
+def get_patient_sector(nratendimento: int) -> Optional[str]:
+    row = (
+        db.session.query(Department.name)
+        .join(
+            Prescription,
+            and_(
+                Department.id == Prescription.idDepartment,
+                Department.idHospital == Prescription.idHospital,
+            ),
+        )
+        .filter(Prescription.admissionNumber == nratendimento)
+        .order_by(Prescription.date.desc())
+        .limit(1)
+        .first()
+    )
+    return row[0] if row else None
