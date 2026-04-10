@@ -79,6 +79,8 @@ class Patient(db.Model):
     gender = db.Column("sexo", db.String(1), nullable=True)
     weight = db.Column("peso", db.Float, nullable=True)
     height = db.Column("altura", db.Float, nullable=True)
+    bed = db.Column("leito", db.String(16), nullable=True)
+    idDepartment = db.Column("fksetor", db.BigInteger, nullable=True)
     weightDate = db.Column("dtpeso", db.DateTime, nullable=True)
     observation = deferred(db.Column("anotacao", db.String, nullable=True))
     skinColor = db.Column("cor", db.String, nullable=True)
