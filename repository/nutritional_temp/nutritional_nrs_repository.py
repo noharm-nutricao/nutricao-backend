@@ -66,7 +66,7 @@ def update_triagem(triagem: NutricionalTriagem, nrs_score: NrsScoreDTO) -> None:
     return None
 
 
-def get_patient_sector(nratendimento: int) -> Optional[str]:
+def get_patient_department(nratendimento: int) -> Optional[str]:
     row = (
         db.session.query(Department.name)
         .join(
