@@ -13,3 +13,8 @@ class NrsScoreDTO:
     nrs_completo: bool
     nrs_ref_at: datetime
     calculado_at: datetime
+
+@dataclass
+class CidMappings:
+    overrides: dict
+    chapters: dict
