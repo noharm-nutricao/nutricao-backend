@@ -49,6 +49,33 @@ class NutricionalNrs(db.Model):
 	)
 
 
+class NutricionalCidGravidade(db.Model):
+	"""Tabela public.nutricional_cid_gravidade (gravidade por capítulo CID)."""
+
+	__tablename__ = "nutricional_cid_gravidade"
+	__table_args__ = (
+		db.CheckConstraint("score_nrs BETWEEN 0 AND 2", name="ck_nutritional_cid_gravidade_score_nrs"),
+		{"schema": "public"},
+	)
+
+	prefixo = db.Column("prefixo", db.CHAR(1), primary_key=True)
+	score_nrs = db.Column("score_nrs", db.SmallInteger, nullable=False)
+	justif = db.Column("justif", db.Text, nullable=True)
+
+
+class NutricionalCidOverride(db.Model):
+	"""Tabela public.nutricional_cid_override (sobrescrita por prefixo CID de 3 chars)."""
+
+	__tablename__ = "nutricional_cid_override"
+	__table_args__ = (
+		db.CheckConstraint("score_nrs BETWEEN 0 AND 2", name="ck_nutritional_cid_override_score_nrs"),
+		{"schema": "public"},
+	)
+
+	prefixo3 = db.Column("prefixo3", db.CHAR(3), primary_key=True)
+	score_nrs = db.Column("score_nrs", db.SmallInteger, nullable=False)
+
+
 class NutricionalTriagem(db.Model):
 	"""Tabela nutricional_triagem (NRS-2002 + mNUTRIC)."""
 
