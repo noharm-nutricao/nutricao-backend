@@ -3,43 +3,30 @@
 Provides a manually-triggered endpoint for testing and validating the
 periodic recalculation job outside of the scheduler cycle.
 
-Only available when ENV != production.
+Only available in non-production environments — enforced by is_admin=True,
+which already raises AuthorizationError in production via api_endpoint_decorator.
 """
 
-from flask import Blueprint, jsonify
+from flask import Blueprint
 
-from config import Config
 from decorators.api_endpoint_decorator import api_endpoint
-from models.enums import NoHarmENV
 from services.nutritional import nutritional_job_service
 
 app_nutritional_job = Blueprint("app_nutritional_job", __name__)
 
 
 @app_nutritional_job.route("/nutritional/job/run", methods=["POST"])
-@api_endpoint()
+@api_endpoint(is_admin=True)
 def run_job():
-    """Trigger the nutritional score recalculation job immediately.
-
-    For diagnostic and testing purposes only. Returns a 403 in production.
-    """
-    if Config.ENV == NoHarmENV.PRODUCTION.value:
-        return jsonify({"error": "Not available in production"}), 403
-
+    """Trigger the nutritional score recalculation job immediately."""
     nutritional_job_service.recalculate_nutritional_scores()
-    return {"status": "ok", "message": "Job executado. Verifique os logs."}
+    return {"message": "Job executado. Verifique os logs."}
 
 
 @app_nutritional_job.route("/nutritional/job/status", methods=["GET"])
-@api_endpoint()
+@api_endpoint(is_admin=True)
 def job_status():
-    """Return the current scheduler status and next run time.
-
-    For diagnostic and testing purposes only. Returns a 403 in production.
-    """
-    if Config.ENV == NoHarmENV.PRODUCTION.value:
-        return jsonify({"error": "Not available in production"}), 403
-
+    """Return the current scheduler status and next run time."""
     scheduler = nutritional_job_service.scheduler
     job = scheduler.get_job("nutritional_score_recalc")
 

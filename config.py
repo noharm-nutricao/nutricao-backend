@@ -66,5 +66,5 @@ class Config:
 
     FEATURE_CONCILIATION_ALGORITHM = getenv("FEATURE_CONCILIATION_ALGORITHM", "FUZZY")
 
-    SCHEDULER_ENABLED = getenv("SCHEDULER_ENABLED", "true").lower() == "true"
+    SCHEDULER_ENABLED = getenv("SCHEDULER_ENABLED", "false").lower() == "true"
     SCHEDULER_INTERVAL_MINUTES = int(getenv("SCHEDULER_INTERVAL_MINUTES", "15"))
