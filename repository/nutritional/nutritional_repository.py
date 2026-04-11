@@ -7,26 +7,21 @@ for nutritional score calculations.
 
 from sqlalchemy import text
 
+from models.enums import SegmentTypeEnum
 from models.main import db
-from models.prescription import Patient
-from models.segment import Segment
-from models.appendix import SegmentDepartment
-
-# tp_segmento integer value that identifies ICU segments in NoHarm.
-# Adjust this constant to match the hospital's NoHarm configuration.
-ICU_SEGMENT_TYPE = 3
 
 
 def get_active_admissions():
     """Return all active admissions with ICU protocol flag.
 
-    Active means dtalta IS NULL. Joins segmentosetor and segmento to derive
-    whether the patient is in an ICU segment (is_icu).
+    Active means dtalta IS NULL. Uses LEFT JOINs on segmentosetor and segmento
+    so patients whose sector has no segment mapping are still included
+    (is_icu defaults to False via COALESCE).
 
     Returns:
-        List of namedtuple-like rows with fields:
-            admissionNumber, fksetor, birthdate, admissionDate,
-            weight, height, id_icd, segment_type (int), is_icu (bool)
+        List of rows with fields:
+            nratendimento, fksetor, dtnascimento, dtinternacao,
+            peso, altura, idcid, tp_segmento (int|None), is_icu (bool)
     """
     query = text(
         """
@@ -39,12 +34,12 @@ def get_active_admissions():
             p.altura,
             p.idcid,
             seg.tp_segmento,
-            (seg.tp_segmento = :icu_type) AS is_icu
+            COALESCE(seg.tp_segmento = :icu_type, false) AS is_icu
         FROM pessoa p
-        JOIN segmentosetor ss  ON ss.fksetor     = p.fksetor
-        JOIN segmento seg      ON seg.idsegmento  = ss.fksegmento
+        LEFT JOIN segmentosetor ss  ON ss.fksetor     = p.fksetor
+        LEFT JOIN segmento seg      ON seg.idsegmento  = ss.fksegmento
         WHERE p.dtalta IS NULL
         """
     )
-    result = db.session.execute(query, {"icu_type": ICU_SEGMENT_TYPE})
+    result = db.session.execute(query, {"icu_type": SegmentTypeEnum.ICU.value})
     return result.fetchall()

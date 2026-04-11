@@ -1,5 +1,16 @@
+"""Nutritional job service — US-BE-06.
 
+Periodic recalculation of Campo 1 scores (NRS-2002 and mNUTRIC) for all
+active admissions. Scheduled via APScheduler with a configurable interval
+(default: 15 minutes).
+
+Dependencies: US-BE-04 (NRS engine) and US-BE-05 (mNUTRIC engine) must be
+implemented before this job can perform actual score updates.
+"""
+
+import atexit
 import logging
+import os
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -14,6 +25,9 @@ scheduler = BackgroundScheduler()
 def recalculate_nutritional_scores():
     """Recalculate Campo 1 scores for all active admissions.
 
+    Processes each active admission independently so that an error in one
+    patient does not interrupt the rest of the batch. Logs total processed
+    count and error count at the end of each run.
     """
     logger.info("Iniciando recalculo de scores nutricionais...")
     patients = nutritional_repository.get_active_admissions()
@@ -21,13 +35,11 @@ def recalculate_nutritional_scores():
 
     for patient in patients:
         try:
-            protocol = "MNUTRIC" if patient.is_icu else "NRS2002"
-
-            if protocol == "MNUTRIC":
-                # TODO (US-BE-05): implement nutritional_score_service.recalculate_mnutric
+            if patient.is_icu:
+                # TODO (US-BE-05): nutritional_score_service.recalculate_mnutric(patient)
                 pass
             else:
-                # TODO (US-BE-04): implement nutritional_score_service.recalculate_nrs
+                # TODO (US-BE-04): nutritional_score_service.recalculate_nrs(patient)
                 pass
 
             processed += 1
@@ -52,11 +64,18 @@ def init_scheduler(app):
     SCHEDULER_INTERVAL_MINUTES from Config to allow disabling the job in
     test/CI environments.
 
+    Guards against Werkzeug's development reloader, which spawns two processes:
+    only the child process (WERKZEUG_RUN_MAIN=true) starts the scheduler.
+
     Args:
         app: Flask application instance (needed for app context inside the job)
     """
     if not Config.SCHEDULER_ENABLED:
         logger.info("Scheduler desabilitado (SCHEDULER_ENABLED=false).")
+        return
+
+    # Werkzeug reloader guard: avoid starting two schedulers in development
+    if app.debug and os.environ.get("WERKZEUG_RUN_MAIN") != "true":
         return
 
     interval_minutes = Config.SCHEDULER_INTERVAL_MINUTES
@@ -73,6 +92,8 @@ def init_scheduler(app):
         replace_existing=True,
     )
     scheduler.start()
+    atexit.register(lambda: scheduler.running and scheduler.shutdown(wait=False))
+
     logger.info(
         "Scheduler iniciado. Job nutritional_score_recalc a cada %d min.",
         interval_minutes,
