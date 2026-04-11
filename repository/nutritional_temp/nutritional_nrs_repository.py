@@ -1,7 +1,8 @@
 from functools import lru_cache
 from typing import Optional
 
-from requests import Session
+
+from flask_sqlalchemy.session import Session
 from sqlalchemy import Row, and_
 
 from models.appendix import Department
@@ -15,7 +16,7 @@ from services.temp_nutritional.nutritional_dtos import CidMappings, NrsScoreDTO
 
 
 def get_nrs_assessment(nratendimento: int) -> Optional[NutricionalNrs]:
-    return _get_nrs_assessment(db, nratendimento)
+    return _get_nrs_assessment(db.session, nratendimento)
 
 
 def _get_nrs_assessment(
@@ -64,8 +65,8 @@ def _get_or_create_triagem(
         classificacao=None,
         calculado_at=None,
     )
-    db.session.add(triagem)
-    db.session.flush()
+    session.add(triagem)
+    session.flush()
     return triagem
 
 
@@ -132,7 +133,7 @@ def build_cid_mappings(session: Session) -> CidMappings:
     overrides: list = get_nutricional_cid_override(session)
     chapters: list = get_nutricional_cid_gravidade(session)
     overrides: dict = {row[0]: row[1] for row in overrides}
-    chapters: dict = ({row[0]: row[1] for row in chapters},)
+    chapters: dict = {row[0]: row[1] for row in chapters}
     return CidMappings(overrides=overrides, chapters=chapters)
 
 
