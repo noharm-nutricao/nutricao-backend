@@ -199,6 +199,28 @@ def test_get_nutricional_cid_gravidade_maps_rows_to_tuples() -> None:
     session.execute.assert_called_once()
 
 
+def test_get_nutricional_cid_override_returns_empty_list_when_no_rows() -> None:
+    session = MagicMock()
+    exec_result = MagicMock()
+    exec_result.fetchall.return_value = []
+    session.execute.return_value = exec_result
+
+    result = repo.get_nutricional_cid_override(session)
+
+    assert result == []
+
+
+def test_get_nutricional_cid_gravidade_returns_empty_list_when_no_rows() -> None:
+    session = MagicMock()
+    exec_result = MagicMock()
+    exec_result.fetchall.return_value = []
+    session.execute.return_value = exec_result
+
+    result = repo.get_nutricional_cid_gravidade(session)
+
+    assert result == []
+
+
 def test_build_cid_mappings_builds_dicts(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(repo, "get_nutricional_cid_override", lambda _s: [("A41", 2)])
     monkeypatch.setattr(repo, "get_nutricional_cid_gravidade", lambda _s: [("A", 1), ("B", 2)])
@@ -207,6 +229,16 @@ def test_build_cid_mappings_builds_dicts(monkeypatch: pytest.MonkeyPatch) -> Non
 
     assert mappings.overrides == {"A41": 2}
     assert mappings.chapters == {"A": 1, "B": 2}
+
+
+def test_build_cid_mappings_handles_empty_sources(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(repo, "get_nutricional_cid_override", lambda _s: [])
+    monkeypatch.setattr(repo, "get_nutricional_cid_gravidade", lambda _s: [])
+
+    mappings = repo.build_cid_mappings(MagicMock())
+
+    assert mappings.overrides == {}
+    assert mappings.chapters == {}
 
 
 def test_get_cid_mappings_cached_uses_cache(monkeypatch: pytest.MonkeyPatch) -> None:

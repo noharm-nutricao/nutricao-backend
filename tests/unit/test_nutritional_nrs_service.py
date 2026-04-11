@@ -517,3 +517,111 @@ def test_casos_obrigatorios_nrs(
     assert dto.nrs_total == expected_total, cenario
     assert _classificacao_por_total(dto.nrs_total) == expected_classe, cenario
     assert dto.nrs_completo is expected_completo, cenario
+
+
+def test_score_nrs_component_a_when_all_triagem_fields_missing_returns_zero_with_risk_false() -> None:
+    row = SimpleNamespace(score_comprometimento=3)
+
+    result = svc.score_nrs_component_a(row)
+
+    assert result == 0
+
+
+@pytest.mark.parametrize(
+    "department",
+    [
+        "UTI coronariana",
+        "unidade de cuidados intensivos",
+        "Unidade de Tratamento Intensivo",
+        "Terapia Intensiva",
+    ],
+)
+def test_is_uti_helper_additional_positive_patterns(department: str) -> None:
+    assert svc.is_uti_helper(department) is True
+
+
+@pytest.mark.parametrize(
+    "department",
+    [
+        "Centro Cirúrgico",
+        "Unidade de Internação",
+        "Hospital Dia",
+    ],
+)
+def test_is_uti_helper_additional_negative_patterns(department: str) -> None:
+    assert svc.is_uti_helper(department) is False
+
+
+def test_internal_component_b_uses_uppercase_chapter_for_lowercase_cid() -> None:
+    is_uti_fn = MagicMock(return_value=False)
+    mappings = svc.CidMappings(overrides={}, chapters={"A": 2})
+    get_mappings_fn = MagicMock(return_value=mappings)
+
+    result = svc._score_nrs_component_b(1, "a991", is_uti_fn, get_mappings_fn)
+
+    assert result == 2
+
+
+def test_internal_component_b_prefers_override_over_chapter() -> None:
+    is_uti_fn = MagicMock(return_value=False)
+    mappings = svc.CidMappings(overrides={"A12": 1}, chapters={"A": 3})
+    get_mappings_fn = MagicMock(return_value=mappings)
+
+    result = svc._score_nrs_component_b(1, "A123", is_uti_fn, get_mappings_fn)
+
+    assert result == 1
+
+
+def test_build_nrs_update_with_nrs_row_and_none_score_component_a() -> None:
+    patient = SimpleNamespace(
+        admissionNumber=1,
+        id_icd="A123",
+        birthdate=datetime(1960, 1, 1),
+    )
+    triagem = SimpleNamespace(id=10, nrs_ref_at=datetime(2024, 1, 1, 10, 0, 0))
+    nrs_row = SimpleNamespace(updated_at=datetime(2025, 1, 1, 10, 0, 0))
+
+    dto = svc.build_nrs_update(
+        patient,
+        triagem,
+        nrs_row,
+        score_nrs_component_a_fn=lambda _row: None,
+        score_nrs_component_b_fn=lambda _adm, _cid: 2,
+        calc_age_fn=lambda _birthdate: 80,
+        now_fn=lambda: datetime(2026, 4, 11, 12, 0, 0),
+    )
+
+    assert dto.nrs_nut is None
+    assert dto.nrs_doenca == 2
+    assert dto.nrs_idade == 1
+    assert dto.nrs_total == 3
+    assert dto.nrs_completo is False
+    assert dto.nrs_ref_at == nrs_row.updated_at
+
+
+def test_recalculate_internal_passes_nrs_row_to_component_a_function() -> None:
+    patient = SimpleNamespace(
+        admissionNumber=1,
+        id_icd="A123",
+        birthdate=datetime(1960, 1, 1),
+    )
+    triagem = SimpleNamespace(id=10, nrs_ref_at=datetime(2024, 1, 1, 10, 0, 0))
+    nrs_row = SimpleNamespace(updated_at=datetime(2025, 1, 1, 10, 0, 0))
+
+    get_or_create_fn = MagicMock(return_value=triagem)
+    get_nrs_fn = MagicMock(return_value=nrs_row)
+    updater_fn = MagicMock()
+    score_a_fn = MagicMock(return_value=1)
+
+    svc.__recalculate_nrs(
+        patient,
+        get_or_create_triagem_fn=get_or_create_fn,
+        nutritional_nrs_repo_fn=get_nrs_fn,
+        updater_func=updater_fn,
+        score_nrs_component_a_fn=score_a_fn,
+        score_nrs_component_b_fn=lambda _adm, _cid: 0,
+        calc_age_fn=lambda _birthdate: 50,
+        now_fn=lambda: datetime(2026, 4, 11, 12, 0, 0),
+    )
+
+    score_a_fn.assert_called_once_with(nrs_row)
