@@ -15,8 +15,14 @@ from services.temp_nutritional.nutritional_dtos import CidMappings, NrsScoreDTO
 
 
 def get_nrs_assessment(nratendimento: int) -> Optional[NutricionalNrs]:
+    return _get_nrs_assessment(db, nratendimento)
+
+
+def _get_nrs_assessment(
+    session: Session, nratendimento: int
+) -> Optional[NutricionalNrs]:
     return (
-        db.session.query(NutricionalNrs)
+        session.query(NutricionalNrs)
         .filter(NutricionalNrs.nratendimento == nratendimento)
         .order_by(NutricionalNrs.updated_at.desc())
         .first()
@@ -24,8 +30,14 @@ def get_nrs_assessment(nratendimento: int) -> Optional[NutricionalNrs]:
 
 
 def get_or_create_triagem(nratendimento: int) -> NutricionalScreening:
+    return _get_or_create_triagem(db.session, nratendimento)
+
+
+def _get_or_create_triagem(
+    session: Session, nratendimento: int
+) -> NutricionalScreening:
     triagem: Optional[NutricionalScreening] = (
-        db.session.query(NutricionalScreening)
+        session.query(NutricionalScreening)
         .filter(NutricionalScreening.nratendimento == nratendimento)
         .first()
     )
@@ -58,6 +70,13 @@ def get_or_create_triagem(nratendimento: int) -> NutricionalScreening:
 
 
 def update_triagem(triagem: NutricionalScreening, nrs_score: NrsScoreDTO) -> None:
+    _update_triagem(db.session, triagem, nrs_score)
+    return None
+
+
+def _update_triagem(
+    session: Session, triagem: NutricionalScreening, nrs_score: NrsScoreDTO
+) -> None:
     triagem.nrs_nut = nrs_score.nrs_nut
     triagem.nrs_doenca = nrs_score.nrs_doenca
     triagem.nrs_idade = nrs_score.nrs_idade
@@ -66,14 +85,18 @@ def update_triagem(triagem: NutricionalScreening, nrs_score: NrsScoreDTO) -> Non
     triagem.nrs_ref_at = nrs_score.nrs_ref_at
     triagem.calculado_at = nrs_score.calculado_at
 
-    db.session.add(triagem)
-    db.session.flush()
+    session.add(triagem)
+    session.flush()
     return None
 
 
 def get_patient_department(nratendimento: int) -> Optional[str]:
+    return _get_patient_department(db.session, nratendimento)
+
+
+def _get_patient_department(session: Session, nratendimento: int) -> Optional[str]:
     row: Row = (
-        db.session.query(Department.name)
+        session.query(Department.name)
         .join(
             Prescription,
             and_(
@@ -90,26 +113,18 @@ def get_patient_department(nratendimento: int) -> Optional[str]:
 
 
 def get_nutricional_cid_override(session: Session) -> list[tuple[str, int]]:
-    rows = session.execute(
-        db.text(
-            """
+    rows = session.execute(db.text("""
             SELECT prefixo3, score_nrs
             FROM public.nutricional_cid_override
-            """
-        )
-    ).fetchall()
+            """)).fetchall()
     return [(row[0], row[1]) for row in rows]
 
 
 def get_nutricional_cid_gravidade(session: Session) -> list[tuple[str, int]]:
-    rows = session.execute(
-        db.text(
-            """
+    rows = session.execute(db.text("""
             SELECT prefixo, score_nrs
             FROM public.nutricional_cid_gravidade
-            """
-        )
-    ).fetchall()
+            """)).fetchall()
     return [(row[0], row[1]) for row in rows]
 
 
