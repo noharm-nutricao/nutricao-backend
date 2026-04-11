@@ -1,18 +1,15 @@
-from dataclasses import dataclass
 from functools import lru_cache
 from typing import Optional
 
 from requests import Session
-from sqlalchemy import and_
+from sqlalchemy import Row, and_
 
 from models.appendix import Department
 from models.main import db
 from models.prescription import Prescription
 from models.temp_nutritional import (
-    NutricionalCidGravidade,
-    NutricionalCidOverride,
     NutricionalNrs,
-    NutricionalTriagem,
+    NutricionalScreening,
 )
 from services.temp_nutritional.nutritional_dtos import CidMappings, NrsScoreDTO
 
@@ -26,16 +23,16 @@ def get_nrs_assessment(nratendimento: int) -> Optional[NutricionalNrs]:
     )
 
 
-def get_or_create_triagem(nratendimento: int) -> NutricionalTriagem:
-    triagem: Optional[NutricionalTriagem] = (
-        db.session.query(NutricionalTriagem)
-        .filter(NutricionalTriagem.nratendimento == nratendimento)
+def get_or_create_triagem(nratendimento: int) -> NutricionalScreening:
+    triagem: Optional[NutricionalScreening] = (
+        db.session.query(NutricionalScreening)
+        .filter(NutricionalScreening.nratendimento == nratendimento)
         .first()
     )
     if triagem:
         return triagem
 
-    triagem = NutricionalTriagem(
+    triagem = NutricionalScreening(
         nratendimento=nratendimento,
         protocolo="NRS2002",
         nrs_nut=None,
@@ -60,7 +57,7 @@ def get_or_create_triagem(nratendimento: int) -> NutricionalTriagem:
     return triagem
 
 
-def update_triagem(triagem: NutricionalTriagem, nrs_score: NrsScoreDTO) -> None:
+def update_triagem(triagem: NutricionalScreening, nrs_score: NrsScoreDTO) -> None:
     triagem.nrs_nut = nrs_score.nrs_nut
     triagem.nrs_doenca = nrs_score.nrs_doenca
     triagem.nrs_idade = nrs_score.nrs_idade
@@ -75,7 +72,7 @@ def update_triagem(triagem: NutricionalTriagem, nrs_score: NrsScoreDTO) -> None:
 
 
 def get_patient_department(nratendimento: int) -> Optional[str]:
-    row = (
+    row: Row = (
         db.session.query(Department.name)
         .join(
             Prescription,
@@ -89,21 +86,31 @@ def get_patient_department(nratendimento: int) -> Optional[str]:
         .limit(1)
         .first()
     )
-    return row[0] if row else None
+    return row.name if row else None
 
 
 def get_nutricional_cid_override(session: Session) -> list[tuple[str, int]]:
-    return session.query(
-        NutricionalCidOverride.prefixo3,
-        NutricionalCidOverride.score_nrs,
-    ).all()
+    rows = session.execute(
+        db.text(
+            """
+            SELECT prefixo3, score_nrs
+            FROM public.nutricional_cid_override
+            """
+        )
+    ).fetchall()
+    return [(row[0], row[1]) for row in rows]
 
 
 def get_nutricional_cid_gravidade(session: Session) -> list[tuple[str, int]]:
-    return session.query(
-        NutricionalCidGravidade.prefixo,
-        NutricionalCidGravidade.score_nrs,
-    ).all()
+    rows = session.execute(
+        db.text(
+            """
+            SELECT prefixo, score_nrs
+            FROM public.nutricional_cid_gravidade
+            """
+        )
+    ).fetchall()
+    return [(row[0], row[1]) for row in rows]
 
 
 def build_cid_mappings(session: Session) -> CidMappings:
