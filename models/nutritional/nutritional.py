@@ -1,10 +1,9 @@
-# modelos ORM das novas tabelas
 from sqlalchemy.dialects import postgresql
 
 from app.extensions import db
 
 class NutricionalNrs(db.Model):
-    __tablename__ = "nutritional_nrs"
+    __tablename__ = "nutricional_nrs"
 
     id = db.Column("id", db.Integer, primary_key=True)
     nratendimento = db.Column("nratendimento", db.BigInteger, nullable=False)

@@ -146,3 +146,9 @@ def pytest_runtest_makereport(item, call):
     docstring = getattr(test_fn, "__doc__")
     if docstring:
         report.nodeid = docstring
+
+
+@pytest.fixture
+def analyst_headers(client):
+    token = get_access(client, roles=["analyst"])
+    return make_headers(token)
