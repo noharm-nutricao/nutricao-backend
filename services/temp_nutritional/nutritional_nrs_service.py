@@ -3,7 +3,7 @@ import re
 from typing import Any, Callable, Optional
 import unicodedata
 from models.prescription import Patient
-from models.temp_nutritional import NutricionalNrs, NutricionalTriagem
+from models.temp_nutritional import NutricionalNrs, NutricionalScreening
 from repository.nutritional_temp.nutritional_nrs_repository import (
     get_cid_mappings_cached,
     get_nrs_assessment,
@@ -98,7 +98,7 @@ def _score_nrs_component_b(
 
     if len(cid) >= 3:
         mappings: CidMappings = get_cid_mappings_cached_fn()
-        prefix3 = cid[:3]
+        prefix3: str = cid[:3]
         if prefix3 in mappings.overrides:
             return mappings.overrides[prefix3]
 
@@ -112,7 +112,7 @@ def calculate_age(dt_nascimento: datetime):
 
 def build_nrs_update(
     patient: Patient,
-    triagem: NutricionalTriagem,
+    triagem: NutricionalScreening,
     nrs_row: Optional[NutricionalNrs],
     *,
     score_nrs_component_a_fn: Callable[[Optional[Any]], Optional[int]],
@@ -120,16 +120,18 @@ def build_nrs_update(
     calc_age_fn: Callable[[datetime], int],
     now_fn: Callable[[], datetime]
 ) -> NrsScoreDTO:
+    comp_a: Optional[int]
+    nrs_ref_at: datetime
     if nrs_row:
         comp_a = score_nrs_component_a_fn(nrs_row)
         nrs_ref_at = nrs_row.updated_at
     else:
         comp_a = None
         nrs_ref_at = triagem.nrs_ref_at
-    comp_b = score_nrs_component_b_fn(patient.admissionNumber, patient.id_icd)
-    comp_c = 1 if calc_age_fn(patient.birthdate) >= 70 else 0
-    completo = comp_a is not None
-    total = (comp_a or 0) + comp_b + comp_c
+    comp_b: int = score_nrs_component_b_fn(patient.admissionNumber, patient.id_icd)
+    comp_c: int = 1 if calc_age_fn(patient.birthdate) >= 70 else 0
+    completo: bool = comp_a is not None
+    total: int = (comp_a or 0) + comp_b + comp_c
     return NrsScoreDTO(
         id=triagem.id,
         nrs_nut=comp_a,
@@ -149,7 +151,7 @@ def __recalculate_nrs(
     nutritional_nrs_repo_fn: Callable[
         [int], Optional[NutricionalNrs]
     ] = get_nrs_assessment,
-    updater_func: Callable[[NutricionalTriagem, NrsScoreDTO], None] = update_triagem,
+    updater_func: Callable[[NutricionalScreening, NrsScoreDTO], None] = update_triagem,
     score_nrs_component_a_fn: Callable[
         [Optional[NutricionalNrs]], Optional[int]
     ] = score_nrs_component_a,
@@ -157,7 +159,7 @@ def __recalculate_nrs(
     calc_age_fn: Callable[[datetime], int] = calculate_age,
     now_fn: Callable[[], datetime] = datetime.now
 ) -> None:
-    triagem: NutricionalTriagem = get_or_create_triagem_fn(patient.admissionNumber)
+    triagem: NutricionalScreening = get_or_create_triagem_fn(patient.admissionNumber)
     nrs_row: Optional[NutricionalNrs] = nutritional_nrs_repo_fn(patient.admissionNumber)
     nrs_score_dto: NrsScoreDTO = build_nrs_update(
         patient,
