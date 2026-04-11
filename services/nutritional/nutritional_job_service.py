@@ -15,6 +15,9 @@ import os
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from config import Config
+from models.appendix import SchemaConfig
+from models.enums import IntegrationStatusEnum
+from models.main import db
 from repository.nutritional import nutritional_repository
 
 logger = logging.getLogger("noharm.nutritional")
@@ -29,32 +32,66 @@ def recalculate_nutritional_scores():
     patient does not interrupt the rest of the batch. Logs total processed
     count and error count at the end of each run.
     """
-    logger.info("Iniciando recalculo de scores nutricionais...")
-    patients = nutritional_repository.get_active_admissions()
-    processed, errors = 0, 0
+    from datetime import datetime
 
-    for patient in patients:
+    logger.info("=" * 60)
+    logger.info("[US-BE-06] Recalculo iniciado em %s", datetime.now().isoformat())
+
+    schemas = (
+        db.session.query(SchemaConfig.schemaName)
+        .filter(SchemaConfig.status != IntegrationStatusEnum.CANCELED.value)
+        .all()
+    )
+    logger.info("[US-BE-06] Schemas ativos encontrados: %d", len(schemas))
+
+    total_processed, total_errors = 0, 0
+
+    for (schema_name,) in schemas:
         try:
-            if patient.is_icu:
-                # TODO (US-BE-05): nutritional_score_service.recalculate_mnutric(patient)
-                pass
-            else:
-                # TODO (US-BE-04): nutritional_score_service.recalculate_nrs(patient)
-                pass
-
-            processed += 1
-        except Exception as e:
-            logger.error(
-                "Erro ao recalcular nratendimento=%s: %s",
-                patient.nratendimento,
-                e,
-                exc_info=True,
+            patients = nutritional_repository.get_active_admissions(schema=schema_name)
+            logger.info(
+                "[US-BE-06] Schema=%s | Admissoes ativas: %d", schema_name, len(patients)
             )
-            errors += 1
+        except Exception as e:
+            logger.error("[US-BE-06] Erro ao buscar admissoes do schema=%s: %s", schema_name, e)
+            db.session.rollback()
+            continue
+
+        for patient in patients:
+            try:
+                if patient.is_icu:
+                    logger.info(
+                        "[US-BE-06] schema=%s nratendimento=%s -> mNUTRIC (UTI)",
+                        schema_name,
+                        patient.nratendimento,
+                    )
+                    # TODO (US-BE-05): nutritional_score_service.recalculate_mnutric(patient)
+                else:
+                    logger.info(
+                        "[US-BE-06] schema=%s nratendimento=%s -> NRS-2002",
+                        schema_name,
+                        patient.nratendimento,
+                    )
+                    # TODO (US-BE-04): nutritional_score_service.recalculate_nrs(patient)
+
+                total_processed += 1
+            except Exception as e:
+                logger.error(
+                    "Erro ao recalcular schema=%s nratendimento=%s: %s",
+                    schema_name,
+                    patient.nratendimento,
+                    e,
+                    exc_info=True,
+                )
+                total_errors += 1
 
     logger.info(
-        "Recalculo concluido. Processados: %d, Erros: %d", processed, errors
+        "[US-BE-06] Recalculo concluido. Processados: %d, Erros: %d, Horario: %s",
+        total_processed,
+        total_errors,
+        datetime.now().isoformat(),
     )
+    logger.info("=" * 60)
 
 
 def init_scheduler(app):
