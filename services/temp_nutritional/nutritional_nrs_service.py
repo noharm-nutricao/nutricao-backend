@@ -2,8 +2,6 @@ from datetime import datetime
 import re
 from typing import Any, Callable, Optional
 import unicodedata
-
-from models.main import db
 from models.prescription import Patient
 from models.temp_nutritional import NutricionalNrs, NutricionalTriagem
 from repository.nutritional_temp.nutritional_nrs_repository import (

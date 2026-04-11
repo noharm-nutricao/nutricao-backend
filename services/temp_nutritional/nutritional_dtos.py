@@ -14,6 +14,7 @@ class NrsScoreDTO:
     nrs_ref_at: datetime
     calculado_at: datetime
 
+
 @dataclass
 class CidMappings:
     overrides: dict
