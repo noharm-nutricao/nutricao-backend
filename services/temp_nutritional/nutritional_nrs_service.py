@@ -128,8 +128,8 @@ def build_nrs_update(
     else:
         comp_a = None
         nrs_ref_at = triagem.nrs_ref_at
-    comp_b = score_nrs_component_b_fn(patient.admissionNumber, patient.idcid)
-    comp_c = 1 if calc_age_fn(patient.dtnascimento) >= 70 else 0
+    comp_b = score_nrs_component_b_fn(patient.admissionNumber, patient.id_icd)
+    comp_c = 1 if calc_age_fn(patient.birthdate) >= 70 else 0
     completo = comp_a is not None
     total = (comp_a or 0) + comp_b + comp_c
     return NrsScoreDTO(
@@ -159,8 +159,8 @@ def __recalculate_nrs(
     calc_age_fn: Callable[[datetime], int] = calculate_age,
     now_fn: Callable[[], datetime] = datetime.now
 ) -> None:
-    triagem: NutricionalTriagem = get_or_create_triagem_fn(patient.nratendimento)
-    nrs_row: Optional[NutricionalNrs] = nutritional_nrs_repo_fn(patient.nratendimento)
+    triagem: NutricionalTriagem = get_or_create_triagem_fn(patient.admissionNumber)
+    nrs_row: Optional[NutricionalNrs] = nutritional_nrs_repo_fn(patient.admissionNumber)
     nrs_score_dto: NrsScoreDTO = build_nrs_update(
         patient,
         triagem,
