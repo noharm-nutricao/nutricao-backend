@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List
 
-from sqlalchemy import asc, desc, func
+from sqlalchemy import asc, desc, func, select
 from sqlalchemy.dialects.postgresql import INTERVAL
 from sqlalchemy.orm import undefer
 
@@ -268,6 +268,14 @@ def get_patient_observation_history(admission_number: int):
         )
     return results
 
+@has_permission(Permission.READ_PRESCRIPTION)
+def get_patient_by_nratendimento(nratendimento):
+    # query = (
+    #     select(Patient.birthdate, Patient.id_icd, Patient.admissionDate)
+    #     .select_from(Patient)
+    #     .filter(nratendimento == Patient.admissionNumber)
+    # )
+    return None
 
 def _audit(patient: Patient, audit_type: PatientAuditTypeEnum, user: User):
     audit = PatientAudit()

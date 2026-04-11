@@ -2,11 +2,12 @@
 # routes/nutritional/nutritional_patients.py
 import logging
 
-from flask import Blueprint
+from flask import ( Blueprint, request ) 
 
 from decorators.api_endpoint_decorator import api_endpoint
 from exception.validation_error import ValidationError
 from services.nutritional import nutritional_patient_service
+from services import patient_service
 from utils import status
 
 app_nutritional = Blueprint("app_nutritional", __name__)
@@ -33,3 +34,23 @@ def get_patients():
         logging.error(f"Falha na rota de pacientes: {str(e)}")
         return {"message": str(e)}, 500
 
+@app_nutritional.route("/nutritional/patients/<int:nratendimento>/mnutric", methods=["POST"])
+@api_endpoint()
+@has_permission(Permission.READ_PRESCRIPTION)
+def calculate_mnutric(nratendimento):
+    try:
+        data = request.get_json()
+
+        apache = data.get("apache_ii", None)
+        sofa = data.get("sofa", None)        
+
+        # patient = patient_service.get_patient_by_nratendimento(nratendimento)
+
+        # nutritional_patient_service.calculate_mnutric(patient, apache, sofa)
+
+        return {
+                "message": "example",
+                "nratendimento": nratendimento
+            }
+    except:
+        return {"message": "error"}, 500
