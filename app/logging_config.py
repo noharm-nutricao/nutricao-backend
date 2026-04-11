@@ -26,7 +26,6 @@ def configure_logging():
     else:
         logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
         logging.getLogger("noharm.backend").setLevel(logging.DEBUG)
-        logging.getLogger("noharm.nutritional").setLevel(logging.DEBUG)
         logging.getLogger("noharm.performance").setLevel(logging.DEBUG)
         logging.getLogger("boto3").setLevel(logging.INFO)
         logging.getLogger("botocore").setLevel(logging.INFO)
