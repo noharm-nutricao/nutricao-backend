@@ -22,13 +22,14 @@ def get_patients():
 def calculate_mnutric(patient, apache, sofa) -> dict:
     today    = datetime.now()
     uti_days = (today.date() - patient.admissionDate.date()).days
+    dados_incompletos = (apache is None) or (sofa is None)
 
     mnutric_age       = _mnutric_age(patient.birthdate)
-    mnutric_apache    = _mnutric_apache_ii(apache)
-    mnutric_sofa      = _mnutric_sofa(sofa)
+    mnutric_apache    = _mnutric_apache_ii(apache) if apache is not None else None
+    mnutric_sofa      = _mnutric_sofa(sofa) if sofa is not None else None
     mnutric_comorbity = _mnutric_comorbity(patient.id_icd)
     mnutric_days_uti  = _mnutric_days_uti(uti_days)
-    mnutric           = (mnutric_age + mnutric_apache + mnutric_sofa + mnutric_comorbity + mnutric_days_uti)
+    mnutric           = (mnutric_age + (mnutric_apache or 0) + (mnutric_sofa or 0) + mnutric_comorbity + mnutric_days_uti)
 
     return {
         "total": mnutric,
@@ -37,7 +38,8 @@ def calculate_mnutric(patient, apache, sofa) -> dict:
         "sofa": mnutric_sofa,
         "comorbity": mnutric_comorbity,
         "daysUTI": mnutric_days_uti,
-        "classify": _mnutric_clasify(mnutric)
+        "classify": _mnutric_clasify(mnutric) if not dados_incompletos else None,
+        "dados_incompletos": dados_incompletos,
     }
 
 def _mnutric_age(birthDate) -> int:

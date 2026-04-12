@@ -7,18 +7,18 @@ import pytest
 from exception.validation_error import ValidationError
 from utils import status
 
-CURRENT_ENDPOINT = "/nutritional/patients/123456/mnutric"
+CURRENT_ENDPOINT = "/nutritional/patients/123456/mnutric-manual"
 
 
 def _payload(apache_ii=22, sofa=8):
     return {"apache_ii": apache_ii, "sofa": sofa}
 
 
-def _put_mnutric(client, headers=None, payload=None):
+def _put_mnutric_manual(client, headers=None, payload=None):
     return client.put(
         CURRENT_ENDPOINT,
         headers=headers,
-        json=payload or _payload(),
+        json=_payload() if payload is None else payload,
     )
 
 
@@ -32,19 +32,6 @@ def _success_result():
         "daysUTI": 1,
         "classify": "cr",
         "dados_incompletos": False,
-    }
-
-
-def _incomplete_result():
-    return {
-        "total": 0,
-        "age": 0,
-        "apache": None,
-        "sofa": None,
-        "comorbity": 0,
-        "daysUTI": 0,
-        "classify": None,
-        "dados_incompletos": True,
     }
 
 
@@ -70,14 +57,14 @@ def _expected_response_data(result, dados_incompletos):
     ],
 )
 def test_put_mnutric_requires_authorization(client, request, headers_fixture_name):
-    """PUT /nutritional/patients/:nratendimento/mnutric - sem autenticação/permissão deve retornar 401"""
+    """PUT /nutritional/patients/:nratendimento/mnutric-manual - sem autenticação/permissão deve retornar 401"""
     headers = (
         request.getfixturevalue(headers_fixture_name)
         if headers_fixture_name is not None
         else None
     )
 
-    response = _put_mnutric(client, headers=headers)
+    response = _put_mnutric_manual(client, headers=headers)
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
@@ -91,24 +78,6 @@ def test_put_mnutric_requires_authorization(client, request, headers_fixture_nam
             _expected_response_data(_success_result(), False),
             id="complete-result",
         ),
-        pytest.param(
-            _incomplete_result(),
-            _payload(apache_ii=None),
-            _expected_response_data(_incomplete_result(), True),
-            id="incomplete-apache-result",
-        ),
-        pytest.param(
-            _incomplete_result(),
-            _payload(sofa=None),
-            _expected_response_data(_incomplete_result(), True),
-            id="incomplete-sofa-result",
-        ),
-        pytest.param(
-            _incomplete_result(),
-            _payload(apache_ii=None, sofa=None),
-            _expected_response_data(_incomplete_result(), True),
-            id="incomplete-result",
-        ),
     ],
 )
 def test_put_mnutric_returns_expected_payload(
@@ -118,7 +87,7 @@ def test_put_mnutric_returns_expected_payload(
     payload,
     expected_data,
 ):
-    """PUT /nutritional/patients/:nratendimento/mnutric - retorna payload esperado para cenários de sucesso"""
+    """PUT /nutritional/patients/:nratendimento/mnutric-manual - retorna payload esperado para cenários de sucesso"""
     with patch(
         "routes.nutritional.nutritional_patients.patient_service.get_patient_mnutric",
         return_value=object(),
@@ -126,7 +95,7 @@ def test_put_mnutric_returns_expected_payload(
         "routes.nutritional.nutritional_patients.nutritional_patient_service.calculate_mnutric",
         return_value=service_result,
     ):
-        response = _put_mnutric(client, headers=analyst_headers, payload=payload)
+        response = _put_mnutric_manual(client, headers=analyst_headers, payload=payload)
 
     body = response.get_json()
 
@@ -136,19 +105,40 @@ def test_put_mnutric_returns_expected_payload(
 
 
 @pytest.mark.parametrize(
+    "payload",
+    [
+        pytest.param(_payload(apache_ii=-1, sofa=8), id="invalid-negative-apache"),
+        pytest.param(_payload(apache_ii=22, sofa=-1), id="invalid-negative-sofa"),
+        pytest.param({"sofa": 8}, id="missing-apache"),
+        pytest.param({"apache_ii": 22}, id="missing-sofa"),
+        pytest.param(_payload(apache_ii=None, sofa=8), id="null-apache"),
+        pytest.param(_payload(apache_ii=22, sofa=None), id="null-sofa"),
+        pytest.param(_payload(apache_ii="22", sofa=8), id="string-apache"),
+        pytest.param(_payload(apache_ii=22, sofa="8"), id="string-sofa"),
+    ],
+)
+def test_put_mnutric_rejects_invalid_manual_scores(client, analyst_headers, payload):
+    """PUT /nutritional/patients/:nratendimento/mnutric-manual - rejeita campos ausentes, nulos ou inválidos com 400"""
+    with patch(
+        "routes.nutritional.nutritional_patients.patient_service.get_patient_mnutric"
+    ) as get_patient_mock, patch(
+        "routes.nutritional.nutritional_patients.nutritional_patient_service.calculate_mnutric"
+    ) as calculate_mock:
+        response = _put_mnutric_manual(client, headers=analyst_headers, payload=payload)
+
+    body = response.get_json()
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert body["status"] == "error"
+    assert body["message"] == "Valores inválidos para APACHE II ou SOFA"
+    assert body["code"] == "errors.invalidRequest"
+    get_patient_mock.assert_not_called()
+    calculate_mock.assert_not_called()
+
+
+@pytest.mark.parametrize(
     ("raise_from", "payload", "exception", "expected_status"),
     [
-        pytest.param(
-            "calculate",
-            _payload(apache_ii=-1, sofa=8),
-            ValidationError(
-                "Valores inválidos para APACHE II ou SOFA",
-                "errors.invalidRequest",
-                status.HTTP_400_BAD_REQUEST,
-            ),
-            status.HTTP_400_BAD_REQUEST,
-            id="invalid-score",
-        ),
         pytest.param(
             "patient",
             _payload(),
@@ -170,7 +160,7 @@ def test_put_mnutric_rejects_invalid_processes(
     exception,
     expected_status,
 ):
-    """PUT /nutritional/patients/:nratendimento/mnutric - retorna erro esperado para cenários inválidos"""
+    """PUT /nutritional/patients/:nratendimento/mnutric-manual - retorna erro esperado para cenários inválidos"""
     patient_patch_kwargs = (
         {"side_effect": exception}
         if raise_from == "patient"
@@ -189,7 +179,7 @@ def test_put_mnutric_rejects_invalid_processes(
         "routes.nutritional.nutritional_patients.nutritional_patient_service.calculate_mnutric",
         **calculate_patch_kwargs,
     ):
-        response = _put_mnutric(client, headers=analyst_headers, payload=payload)
+        response = _put_mnutric_manual(client, headers=analyst_headers, payload=payload)
 
     body = response.get_json()
 
