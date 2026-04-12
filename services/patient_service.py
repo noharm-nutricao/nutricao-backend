@@ -269,13 +269,15 @@ def get_patient_observation_history(admission_number: int):
     return results
 
 @has_permission(Permission.READ_PRESCRIPTION)
-def get_patient_by_nratendimento(nratendimento):
-    # query = (
-    #     select(Patient.birthdate, Patient.id_icd, Patient.admissionDate)
-    #     .select_from(Patient)
-    #     .filter(nratendimento == Patient.admissionNumber)
-    # )
-    return None
+def get_patient_mnutric(admission_number: int):
+    event = patient_repository.get_patient_mnutric(admissionNumber=admission_number)
+    
+    patient = Patient()
+    patient.birthdate     = event.birthdate
+    patient.id_icd        = event.id_icd or ''
+    patient.admissionDate = event.admissionDate
+    
+    return patient
 
 def _audit(patient: Patient, audit_type: PatientAuditTypeEnum, user: User):
     audit = PatientAudit()

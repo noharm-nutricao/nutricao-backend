@@ -19,58 +19,77 @@ def get_patients():
 
         raise Exception("Estamos com problemas para consultar pacientes em nossa base, tente novamente mais tarde")
 
-def calculate_mnutric(patient, apache, sofa) -> int:
-    today = datetime.now()
-    UtiDays = today.date() - patient.admissionDate.date()
+def calculate_mnutric(patient, apache, sofa) -> dict:
+    today    = datetime.now()
+    uti_days = (today.date() - patient.admissionDate.date()).days
 
-    mn_age = _mn_Age(patient.birthdate)
-    mn_apache = _mn_ApacheII(apache)
-    mn_sofa = _mn_Sofa(sofa)
-    mn_comorbity = _mn_Comorbity(patient.id_icd)
-    mn_daysUTI = _mn_DaysUTI(UtiDays)
+    mnutric_age       = _mnutric_age(patient.birthdate)
+    mnutric_apache    = _mnutric_apache_ii(apache)
+    mnutric_sofa      = _mnutric_sofa(sofa)
+    mnutric_comorbity = _mnutric_comorbity(patient.id_icd)
+    mnutric_days_uti  = _mnutric_days_uti(uti_days)
+    mnutric           = (mnutric_age + mnutric_apache + mnutric_sofa + mnutric_comorbity + mnutric_days_uti)
 
-    mnutric = sum(v for v in [mn_age, mn_sofa, mn_comorbity, mn_daysUTI, mn_apache]
-                if v is not None)
-    return mnutric
+    return {
+        "total": mnutric,
+        "age": mnutric_age,
+        "apache": mnutric_apache,
+        "sofa": mnutric_sofa,
+        "comorbity": mnutric_comorbity,
+        "daysUTI": mnutric_days_uti,
+        "classify": _mnutric_clasify(mnutric)
+    }
 
-def _mn_Age(birthDate): #considerando que seja um datetime
-    mn_age = 0
-    today = datetime.now()
-    age = (today.year - birthDate.year)
+def _mnutric_age(birthDate) -> int:
+    mnutric_age = 0
+    today       = datetime.now()
+    age         = (today.year - birthDate.year)
     if(today.month, today.day) < (birthDate.month, birthDate.day):
-        age -=1
+        age -= 1
     if age >= 50 and age < 75:
-        mn_age = 1
+        mnutric_age = 1
     if age >= 75:
-        mn_age = 2
-    return mn_age
+        mnutric_age = 2
+    return mnutric_age
 
-def _mn_ApacheII(apacheII): #recebe um int
-    mn_ApacheII = 0
-    if apacheII >= 15 and apacheII < 20:
-        mn_ApacheII = 1
-    if apacheII >= 20 and apacheII < 28:
-        mn_ApacheII = 2
-    if apacheII >= 28:
-        mn_ApacheII = 3
-    return mn_ApacheII
+def _mnutric_apache_ii(apache_ii) -> int:
+    mnutric_apache_ii = 0
+    if apache_ii >= 15 and apache_ii < 20:
+        mnutric_apache_ii = 1
+    if apache_ii >= 20 and apache_ii < 28:
+        mnutric_apache_ii = 2
+    if apache_ii >= 28:
+        mnutric_apache_ii = 3
+    return mnutric_apache_ii
 
-def _mn_Sofa(sofa): #recebe um int
-    mn_Sofa = 0
+def _mnutric_sofa(sofa) -> int:
+    mnutric_sofa = 0
     if sofa >= 6 and sofa < 10:
-        mn_Sofa = 1
+        mnutric_sofa = 1
     if sofa >= 10:
-        mn_Sofa = 2
-    return mn_Sofa
+        mnutric_sofa = 2
+    return mnutric_sofa
 
-def _mn_Comorbity(comorbity): #considerando que comorbidade seja uma lista de CID
-    mn_Comorbity = 0
-    if comorbity.length()>1:
-        mn_Comorbity = 1
-    return mn_Comorbity
+def _mnutric_comorbity(comorbity) -> int:
+    mnutric_comorbity = 0
+    if comorbity:
+        mnutric_comorbity = 1
+    return mnutric_comorbity
 
-def _mn_DaysUTI(daysUTI):
-    mn_DaysUTI = 0
-    if daysUTI > 1:
-        mn_DaysUTI = 1
-    return mn_DaysUTI
+def _mnutric_days_uti(days_uti) -> int:
+    mnutric_days_uti = 0
+    if days_uti > 1:
+        mnutric_days_uti = 1
+    return mnutric_days_uti
+
+def _mnutric_clasify(mnutric: int) -> str:
+    if mnutric > 0 and mnutric <= 2:
+        return "bx"
+    elif mnutric >= 3 and mnutric <= 4:
+        return "md"
+    elif mnutric >= 5 and mnutric <= 6:
+        return "al"
+    elif mnutric >= 7:
+        return "cr"
+    else:
+        return "unknown"
