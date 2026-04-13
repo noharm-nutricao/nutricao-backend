@@ -1,4 +1,5 @@
 from repository.nutritional import nutritional_repository
+import logging
 
 
 def get_patients():
@@ -9,9 +10,8 @@ def get_patients():
         return nutritional_repository.get_patients_repository()
     except Exception as e:
 
-        print(f"Erro ao buscar pacientes: {str(e)}")
+        logging.error(f"Erro ao buscar pacientes no repositório: {str(e)}")
 
-        # Lançamos uma exceção que a sua API capture ou retornamos uma mensagem clara
-        # Se o projeto não tiver um Handler, você pode lançar um erro genérico:
+
         raise Exception("Estamos com problemas para consultar pacientes em nossa base, tente novamente mais tarde")
 
