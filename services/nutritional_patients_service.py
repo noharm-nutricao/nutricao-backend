@@ -3,6 +3,7 @@
 from datetime import datetime, timezone
 
 from decorators.has_permission_decorator import Permission, has_permission
+from models.enums import SegmentTypeEnum
 from models.requests.nutritional_patients_request import NutritionalPatientsRequest
 from repository import nutritional_patients_repository
 
@@ -12,7 +13,7 @@ def get_patients(request_data: NutritionalPatientsRequest):
     """Return active admissions with basic patient data for the nutrition module.
 
     Business logic:
-    - protocolo derived from tp_segmento (1=UTI -> MNUTRIC, else -> NRS2002)
+    - protocolo derived from tp_segmento (ICU=3 -> MNUTRIC, else -> NRS2002)
     - idade calculated from dtnascimento
     - dias calculated from dtinternacao
     - imc calculated from peso (kg) and altura (cm)
@@ -31,7 +32,7 @@ def get_patients(request_data: NutritionalPatientsRequest):
 
     for idx, row in enumerate(rows, start=1):
         # Derive protocolo from segment type
-        protocolo = "MNUTRIC" if row.tp_segmento == 1 else "NRS2002"
+        protocolo = "MNUTRIC" if row.tp_segmento == SegmentTypeEnum.ICU.value else "NRS2002"
 
         # Calculate idade (age in complete years)
         idade = _calculate_age(row.dtnascimento, now) if row.dtnascimento else None

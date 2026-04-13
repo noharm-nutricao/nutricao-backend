@@ -1,4 +1,5 @@
 import pytest
+from datetime import date
 from sqlalchemy import text
 
 from security.role import Role
@@ -126,7 +127,7 @@ def _seed():
             "INSERT INTO demo.segmento (idsegmento, nome, status, tp_segmento, cpoe, cpoe_ambulatorio) "
             "VALUES (:id, :nome, 1, :tp, false, false) ON CONFLICT DO NOTHING"
         ),
-        {"id": _SEG_UTI, "nome": "Seg UTI Teste Nutri", "tp": 1},
+        {"id": _SEG_UTI, "nome": "Seg UTI Teste Nutri", "tp": 3},
     )
     session.execute(
         text(
@@ -263,22 +264,32 @@ def _seed():
 
 
 def _cleanup():
-    session.execute(
-        text("DELETE FROM demo.nutricional_avaliacao WHERE nratendimento >= 900000")
-    )
-    session.execute(
-        text("DELETE FROM demo.nutricional_d7 WHERE nratendimento >= 900000")
-    )
-    session.execute(
-        text("DELETE FROM demo.nutricional_triagem WHERE nratendimento >= 900000")
-    )
-    session.execute(
-        text("DELETE FROM demo.nutricional_glim WHERE nratendimento >= 900000")
-    )
-    session.execute(
-        text("DELETE FROM demo.nutricional_alerta WHERE nratendimento >= 900000")
-    )
-    session.execute(text("DELETE FROM demo.pessoa WHERE nratendimento >= 900000"))
+    _test_adms = [_ADM_ACTIVE_UTI, _ADM_ACTIVE_ENF, _ADM_DISCHARGED, _ADM_NO_WEIGHT]
+    for adm in _test_adms:
+        session.execute(
+            text("DELETE FROM demo.nutricional_avaliacao WHERE nratendimento = :adm"),
+            {"adm": adm},
+        )
+        session.execute(
+            text("DELETE FROM demo.nutricional_d7 WHERE nratendimento = :adm"),
+            {"adm": adm},
+        )
+        session.execute(
+            text("DELETE FROM demo.nutricional_triagem WHERE nratendimento = :adm"),
+            {"adm": adm},
+        )
+        session.execute(
+            text("DELETE FROM demo.nutricional_glim WHERE nratendimento = :adm"),
+            {"adm": adm},
+        )
+        session.execute(
+            text("DELETE FROM demo.nutricional_alerta WHERE nratendimento = :adm"),
+            {"adm": adm},
+        )
+        session.execute(
+            text("DELETE FROM demo.pessoa WHERE nratendimento = :adm"),
+            {"adm": adm},
+        )
     session.execute(
         text("DELETE FROM demo.segmentosetor WHERE fksetor IN (:s1, :s2)"),
         {"s1": _SETOR_UTI, "s2": _SETOR_ENF},
@@ -426,16 +437,23 @@ def test_d7_calculation(client, analyst_headers):
     assert enf["d7"] is False
 
 
+def _expected_age(birth_str):
+    """Calculate expected age in complete years from a YYYY-MM-DD birthdate."""
+    bd = date.fromisoformat(birth_str)
+    today = date.today()
+    return today.year - bd.year - ((today.month, today.day) < (bd.month, bd.day))
+
+
 def test_idade_and_dias(client, analyst_headers):
     response = client.get(ENDPOINT, headers=analyst_headers)
     data = response.get_json()["data"]
 
     uti = _find_patient(data, _ADM_ACTIVE_UTI)
-    assert uti["idade"] == 67
+    assert uti["idade"] == _expected_age("1959-03-15")
     assert uti["dias"] == 14
 
     enf = _find_patient(data, _ADM_ACTIVE_ENF)
-    assert enf["idade"] == 35
+    assert enf["idade"] == _expected_age("1990-08-22")
     assert enf["dias"] == 5
 
 

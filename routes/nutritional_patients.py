@@ -10,7 +10,7 @@ app_nutritional_patients = Blueprint("app_nutritional_patients", __name__)
 
 
 @app_nutritional_patients.route("/nutritional/patients", methods=["GET"])
-@api_endpoint()
+@api_endpoint(include_total=True)
 def get_nutritional_patients():
     """GET /nutritional/patients - Returns active admissions with basic patient data."""
     return nutritional_patients_service.get_patients(

@@ -4,6 +4,7 @@ from sqlalchemy import case, extract, func, literal
 from sqlalchemy.dialects.postgresql import INTERVAL
 
 from models.appendix import Department, SegmentDepartment
+from models.enums import SegmentTypeEnum
 from models.main import db
 from models.nutritional import (
     NutritionalAvaliacao,
@@ -26,9 +27,9 @@ def get_patients(setor=None, ala=None):
         List of result rows with patient and derived nutritional fields.
     """
 
-    # Derive ala label from segment type: 1 = UTI, else 'Enfermaria'
+    # Derive ala label from segment type: ICU (3) = UTI, else 'Enfermaria'
     ala_label = case(
-        (Segment.type == 1, literal("UTI")),
+        (Segment.type == SegmentTypeEnum.ICU.value, literal("UTI")),
         else_=literal("Enfermaria"),
     ).label("ala")
 
@@ -133,7 +134,8 @@ def get_patients(setor=None, ala=None):
         .select_from(Patient)
         .join(
             SegmentDepartment,
-            SegmentDepartment.idDepartment == Patient.idDepartment,
+            (SegmentDepartment.idDepartment == Patient.idDepartment)
+            & (SegmentDepartment.idHospital == Patient.idHospital),
         )
         .join(
             Segment,
@@ -141,7 +143,8 @@ def get_patients(setor=None, ala=None):
         )
         .join(
             Department,
-            Department.id == Patient.idDepartment,
+            (Department.id == Patient.idDepartment)
+            & (Department.idHospital == Patient.idHospital),
         )
         .filter(Patient.dischargeDate.is_(None))
     )
@@ -151,8 +154,10 @@ def get_patients(setor=None, ala=None):
 
     if ala is not None:
         if ala.upper() == "UTI":
-            query = query.filter(Segment.type == 1)
+            query = query.filter(Segment.type == SegmentTypeEnum.ICU.value)
+        elif ala.upper() == "ENFERMARIA":
+            query = query.filter(Segment.type != SegmentTypeEnum.ICU.value)
         else:
-            query = query.filter(Segment.type != 1)
+            query = query.filter(Segment.type == None)
 
     return query.all()

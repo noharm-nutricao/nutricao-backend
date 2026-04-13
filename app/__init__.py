@@ -66,8 +66,11 @@ def create_app(config_name=None):
     configure_security_headers(app)
 
     # Start periodic nutritional score recalculation job (US-BE-06)
-    from services.nutritional.nutritional_job_service import init_scheduler
+    # NOTE: In multi-worker deployments (gunicorn), use --preload flag or
+    # set SCHEDULER_ENABLED=true only for one worker to avoid duplicate jobs.
+    if not app.config.get("TESTING"):
+        from services.nutritional.nutritional_job_service import init_scheduler
 
-    init_scheduler(app)
+        init_scheduler(app)
 
     return app
