@@ -67,6 +67,7 @@ class Role(Enum):
             Permission.ADMIN_NZERO,
             Permission.UPDATE_USER_SG,
             Permission.READ_NAV,
+            Permission.WRITE_NUTRITIONAL,
         ],
     )
 
@@ -111,6 +112,7 @@ class Role(Enum):
             Permission.READ_PROTOCOLS,
             Permission.READ_CUSTOM_REPORTS,
             Permission.WRITE_CUSTOM_REPORTS_GRAPHS,
+            Permission.WRITE_NUTRITIONAL,
         ],
     )
 
@@ -130,6 +132,7 @@ class Role(Enum):
             Permission.WRITE_BASIC_FEATURES,
             Permission.READ_BASIC_FEATURES,
             Permission.READ_SUPPORT,
+            Permission.WRITE_NUTRITIONAL,
         ],
     )
 

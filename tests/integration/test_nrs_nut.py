@@ -83,7 +83,7 @@ def _seed():
             "INSERT INTO demo.segmento (idsegmento, nome, status, tp_segmento, cpoe, cpoe_ambulatorio) "
             "VALUES (:id, :nome, 1, :tp, false, false) ON CONFLICT DO NOTHING"
         ),
-        {"id": _SEG_UTI, "nome": "Seg UTI NRS", "tp": 1},
+        {"id": _SEG_UTI, "nome": "Seg UTI NRS", "tp": 3},
     )
     session.execute(
         text(

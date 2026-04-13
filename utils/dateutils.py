@@ -1,4 +1,17 @@
 from datetime import datetime, date
+from zoneinfo import ZoneInfo
+
+SP_TZ = ZoneInfo("America/Sao_Paulo")
+
+
+def now_sp():
+    """Return the current datetime aware of America/Sao_Paulo timezone."""
+    return datetime.now(SP_TZ)
+
+
+def today_sp():
+    """Return the current date in America/Sao_Paulo timezone."""
+    return now_sp().date()
 
 
 def to_iso(date: datetime):

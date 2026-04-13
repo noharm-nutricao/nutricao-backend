@@ -1,15 +1,14 @@
-from datetime import datetime
-
 from sqlalchemy import text
 
 from decorators.has_permission_decorator import has_permission
 from exception.validation_error import ValidationError
+from models.enums import SegmentTypeEnum
 from models.main import User, db
 from models.nutritional import NutritionalTriagem
 from models.prescription import Patient
-from models.segment import Segment
 from security.permission import Permission
 from utils import status
+from utils.dateutils import now_sp, today_sp
 
 
 _MNUTRIC_AGE_THRESHOLDS = [(75, 2), (60, 1)]
@@ -53,7 +52,7 @@ def _mnutric_score_comor(id_icd):
 def _calculate_age(birthdate):
     if birthdate is None:
         return 0
-    today = datetime.now().date()
+    today = today_sp()
     bd = birthdate if hasattr(birthdate, "year") else birthdate.date()
     return today.year - bd.year - ((today.month, today.day) < (bd.month, bd.day))
 
@@ -61,7 +60,7 @@ def _calculate_age(birthdate):
 def _calculate_days(admission_date):
     if admission_date is None:
         return 0
-    today = datetime.now().date()
+    today = today_sp()
     ad = admission_date if hasattr(admission_date, "year") else admission_date.date()
     return (today - ad).days
 
@@ -81,9 +80,9 @@ def update_nrs_nut(nratendimento, request_data, user_context: User):
             status.HTTP_404_NOT_FOUND,
         )
 
-    tp_segmento = _get_segment_type(patient)
+    tp_segmento = _get_segment_type(nratendimento)
 
-    if tp_segmento != 1:
+    if tp_segmento != SegmentTypeEnum.ICU.value:
         raise ValidationError(
             "Paciente não é de UTI — endpoint exclusivo para protocolo MNUTRIC",
             "errors.businessRule",
@@ -97,7 +96,7 @@ def update_nrs_nut(nratendimento, request_data, user_context: User):
         .first()
     )
 
-    now = datetime.now()
+    now = now_sp()
 
     if triagem is None:
         triagem = NutritionalTriagem()
@@ -133,14 +132,14 @@ def update_nrs_nut(nratendimento, request_data, user_context: User):
 
     nrs_completo = triagem.nrs_completo if triagem.nrs_completo is not None else False
 
-    classificacao = triagem.classificacao
-    if classificacao is None:
-        if mnutric_total >= 5:
-            classificacao = "cr"
-        elif mnutric_total >= 3:
-            classificacao = "md"
-        else:
-            classificacao = "bx"
+    if mnutric_total >= 5:
+        classificacao = "cr"
+    elif mnutric_total >= 3:
+        classificacao = "md"
+    else:
+        classificacao = "bx"
+
+    triagem.classificacao = classificacao
 
     db.session.flush()
 
@@ -170,22 +169,25 @@ def update_nrs_nut(nratendimento, request_data, user_context: User):
     }
 
 
-def _get_segment_type(patient):
+def _get_segment_type(nratendimento):
     result = db.session.execute(
         text(
             """
             SELECT seg.tp_segmento
-            FROM segmentosetor ss
+            FROM pessoa p
+            JOIN segmentosetor ss ON ss.fksetor = p.fksetor
             JOIN segmento seg ON seg.idsegmento = ss.idsegmento
-            WHERE ss.fksetor = :fksetor
+            WHERE p.nratendimento = :nratendimento
             LIMIT 1
             """
         ),
-        {"fksetor": patient.idHospital},
+        {"nratendimento": nratendimento},
     ).fetchone()
 
     if result is None:
         return None
 
     return result[0]
+
+
 
