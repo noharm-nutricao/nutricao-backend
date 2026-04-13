@@ -11,6 +11,8 @@ implemented before this job can perform actual score updates.
 import atexit
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -80,9 +82,19 @@ def init_scheduler(app):
 
     interval_minutes = Config.SCHEDULER_INTERVAL_MINUTES
 
+    timeout_seconds = Config.SCHEDULER_JOB_TIMEOUT_SECONDS
+
     def _job_with_context():
         with app.app_context():
-            recalculate_nutritional_scores()
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(recalculate_nutritional_scores)
+                try:
+                    future.result(timeout=timeout_seconds)
+                except FuturesTimeoutError:
+                    logger.error(
+                        "[US-BE-06] Job excedeu timeout de %ds e foi interrompido.",
+                        timeout_seconds,
+                    )
 
     scheduler.add_job(
         _job_with_context,
