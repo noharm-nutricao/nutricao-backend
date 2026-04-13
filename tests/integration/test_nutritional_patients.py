@@ -1,20 +1,3 @@
-"""Integration tests for GET /nutritional/patients endpoint (US-BE-03).
-
-Covers:
-- HTTP 200 (success, including empty results)
-- HTTP 401 (missing token / insufficient permission)
-- Response payload structure and all required fields
-- dtalta IS NULL filter (only active admissions)
-- nome_setor obtained via JOIN with demo.setor
-- protocolo derived from segmentosetor → segmento.tp_segmento
-- haval hours calculated from nutricional_avaliacao.created_at
-- d7 boolean when D7 active with dt_prevista <= NOW()+48h
-- imc calculated from peso (kg) and altura (cm)
-- Patient name absent (LGPD)
-- campo1 null in this version
-- Filters ?setor= and ?ala= working
-"""
-
 import pytest
 from sqlalchemy import text
 
@@ -23,17 +6,16 @@ from tests.conftest import get_access, make_headers, session, session_commit
 
 ENDPOINT = "/nutritional/patients"
 
-# High IDs to avoid collision with seed data
 _SETOR_UTI = 900
 _SETOR_ENF = 901
-_SEG_UTI = 900  # tp_segmento = 1 → UTI
-_SEG_ENF = 901  # tp_segmento = 2 → Enfermaria
+_SEG_UTI = 900
+_SEG_ENF = 901
 _HOSPITAL = 1
 _ADM_ACTIVE_UTI = 900001
 _ADM_ACTIVE_ENF = 900002
 _ADM_DISCHARGED = 900003
+_ADM_NO_WEIGHT = 900004
 
-# ── Response fields that every patient object MUST contain ──────────
 REQUIRED_FIELDS = {
     "id",
     "leito",
@@ -63,12 +45,8 @@ REQUIRED_FIELDS = {
 }
 
 
-# ── Fixtures ────────────────────────────────────────────────────────
-
-
 @pytest.fixture(scope="module", autouse=True)
 def setup_nutritional_module():
-    """Create nutritional tables and seed all test data (module-scoped)."""
     _ensure_schema()
     _cleanup()
     _seed()
@@ -78,22 +56,15 @@ def setup_nutritional_module():
 
 @pytest.fixture()
 def dispensing_headers(client):
-    """Headers with DISPENSING_MANAGER role — has NO READ_PRESCRIPTION."""
     return make_headers(get_access(client, roles=[Role.DISPENSING_MANAGER.value]))
 
 
 @pytest.fixture()
 def analyst_headers(client):
-    """Headers with PRESCRIPTION_ANALYST role — has READ_PRESCRIPTION."""
     return make_headers(get_access(client, roles=[Role.PRESCRIPTION_ANALYST.value]))
 
 
-# ── Schema / seed helpers ───────────────────────────────────────────
-
-
 def _ensure_schema():
-    """Ensure all required tables and columns exist in the test DB."""
-    # pessoa may lack fksetor / leito in the test dump
     session.execute(
         text("ALTER TABLE demo.pessoa ADD COLUMN IF NOT EXISTS fksetor BIGINT")
     )
@@ -150,9 +121,6 @@ def _ensure_schema():
 
 
 def _seed():
-    """Insert self-contained test data (segments, departments, patients, nutritional)."""
-
-    # ── Segments ──
     session.execute(
         text(
             "INSERT INTO demo.segmento (idsegmento, nome, status, tp_segmento, cpoe, cpoe_ambulatorio) "
@@ -168,7 +136,6 @@ def _seed():
         {"id": _SEG_ENF, "nome": "Seg Enf Teste Nutri", "tp": 2},
     )
 
-    # ── Departments (setor) ──
     session.execute(
         text(
             "INSERT INTO demo.setor (fksetor, fkhospital, nome) "
@@ -184,7 +151,6 @@ def _seed():
         {"id": _SETOR_ENF, "hosp": _HOSPITAL, "nome": "Enfermaria Teste"},
     )
 
-    # ── Segment ↔ Department links ──
     session.execute(
         text(
             "INSERT INTO demo.segmentosetor (idsegmento, fkhospital, fksetor) "
@@ -200,8 +166,6 @@ def _seed():
         {"seg": _SEG_ENF, "hosp": _HOSPITAL, "setor": _SETOR_ENF},
     )
 
-    # ── Patients ──
-    # Active UTI patient (no discharge date)
     session.execute(
         text(
             "INSERT INTO demo.pessoa "
@@ -217,7 +181,6 @@ def _seed():
             "setor": _SETOR_UTI,
         },
     )
-    # Active Enfermaria patient (no discharge date)
     session.execute(
         text(
             "INSERT INTO demo.pessoa "
@@ -233,7 +196,6 @@ def _seed():
             "setor": _SETOR_ENF,
         },
     )
-    # Discharged patient — must NOT appear in results
     session.execute(
         text(
             "INSERT INTO demo.pessoa "
@@ -249,8 +211,21 @@ def _seed():
             "setor": _SETOR_ENF,
         },
     )
-
-    # ── Nutritional evaluation for the UTI patient ──
+    session.execute(
+        text(
+            "INSERT INTO demo.pessoa "
+            "(fkpessoa, fkhospital, nratendimento, dtinternacao, dtnascimento, "
+            " sexo, peso, altura, fksetor, leito) "
+            "VALUES (:pk, :hosp, :adm, NOW() - INTERVAL '3 days', '2000-01-15', "
+            " 'M', NULL, NULL, :setor, 'ENF-20')"
+        ),
+        {
+            "pk": _ADM_NO_WEIGHT,
+            "hosp": _HOSPITAL,
+            "adm": _ADM_NO_WEIGHT,
+            "setor": _SETOR_ENF,
+        },
+    )
     session.execute(
         text(
             "INSERT INTO demo.nutricional_avaliacao "
@@ -259,8 +234,6 @@ def _seed():
         ),
         {"adm": _ADM_ACTIVE_UTI},
     )
-
-    # ── D7 active and expiring within 48h for the UTI patient ──
     session.execute(
         text(
             "INSERT INTO demo.nutricional_d7 "
@@ -269,8 +242,6 @@ def _seed():
         ),
         {"adm": _ADM_ACTIVE_UTI},
     )
-
-    # ── Triage for UTI patient ──
     session.execute(
         text(
             "INSERT INTO demo.nutricional_triagem "
@@ -279,12 +250,19 @@ def _seed():
         ),
         {"adm": _ADM_ACTIVE_UTI},
     )
+    session.execute(
+        text(
+            "INSERT INTO demo.nutricional_glim "
+            "(nratendimento, diagnostico, fenotipos, etiologicos, created_at, created_by) "
+            "VALUES (:adm, 'mod', ARRAY['perda_peso', 'baixo_imc'], ARRAY['inflamacao'], NOW(), 1)"
+        ),
+        {"adm": _ADM_ACTIVE_UTI},
+    )
 
     session_commit()
 
 
 def _cleanup():
-    """Remove all test-generated data (high-ID ranges)."""
     session.execute(
         text("DELETE FROM demo.nutricional_avaliacao WHERE nratendimento >= 900000")
     )
@@ -316,24 +294,14 @@ def _cleanup():
     session_commit()
 
 
-# ── Helpers ─────────────────────────────────────────────────────────
-
-
 def _find_patient(data, admission_number):
-    """Find a patient dict in the response list by admission number."""
     for p in data:
         if p["id"] == admission_number:
             return p
     return None
 
 
-# ═══════════════════════════════════════════════════════════════════
-# HTTP STATUS TESTS
-# ═══════════════════════════════════════════════════════════════════
-
-
 def test_get_nutritional_patients_200(client, analyst_headers):
-    """GET /nutritional/patients — 200 OK com role READ_PRESCRIPTION"""
     response = client.get(ENDPOINT, headers=analyst_headers)
 
     assert response.status_code == 200
@@ -343,30 +311,21 @@ def test_get_nutritional_patients_200(client, analyst_headers):
 
 
 def test_get_nutritional_patients_401_no_token(client):
-    """GET /nutritional/patients — 401 quando token ausente"""
     response = client.get(ENDPOINT)
 
     assert response.status_code == 401
 
 
 def test_get_nutritional_patients_401_no_permission(client, dispensing_headers):
-    """GET /nutritional/patients — 401 quando role não tem READ_PRESCRIPTION"""
     response = client.get(ENDPOINT, headers=dispensing_headers)
 
     assert response.status_code == 401
 
 
-# ═══════════════════════════════════════════════════════════════════
-# RESPONSE STRUCTURE TESTS
-# ═══════════════════════════════════════════════════════════════════
-
-
 def test_response_contains_all_required_fields(client, analyst_headers):
-    """Cada objeto paciente deve conter TODOS os campos especificados na US"""
     response = client.get(ENDPOINT, headers=analyst_headers)
     data = response.get_json()["data"]
 
-    # Must have at least our test patients
     assert len(data) >= 2
 
     for patient in data:
@@ -375,7 +334,6 @@ def test_response_contains_all_required_fields(client, analyst_headers):
 
 
 def test_patient_name_absent_lgpd(client, analyst_headers):
-    """Nome do paciente NÃO deve estar na resposta (LGPD)"""
     response = client.get(ENDPOINT, headers=analyst_headers)
     data = response.get_json()["data"]
 
@@ -386,7 +344,6 @@ def test_patient_name_absent_lgpd(client, analyst_headers):
 
 
 def test_campo1_is_null(client, analyst_headers):
-    """campo1 deve ser null nesta versão (populado em US-BE-07)"""
     response = client.get(ENDPOINT, headers=analyst_headers)
     data = response.get_json()["data"]
 
@@ -394,24 +351,17 @@ def test_campo1_is_null(client, analyst_headers):
         assert patient["campo1"] is None
 
 
-# ═══════════════════════════════════════════════════════════════════
-# BUSINESS LOGIC TESTS
-# ═══════════════════════════════════════════════════════════════════
-
-
 def test_only_active_admissions(client, analyst_headers):
-    """Retorna apenas admissões com dtalta IS NULL (sem pacientes com alta)"""
     response = client.get(ENDPOINT, headers=analyst_headers)
     data = response.get_json()["data"]
 
     ids = [p["id"] for p in data]
-    assert _ADM_ACTIVE_UTI in ids, "Paciente ativo UTI deveria estar presente"
-    assert _ADM_ACTIVE_ENF in ids, "Paciente ativo Enf deveria estar presente"
-    assert _ADM_DISCHARGED not in ids, "Paciente com alta NÃO deveria estar presente"
+    assert _ADM_ACTIVE_UTI in ids
+    assert _ADM_ACTIVE_ENF in ids
+    assert _ADM_DISCHARGED not in ids
 
 
 def test_nome_setor_via_join(client, analyst_headers):
-    """nome_setor deve ser obtido via JOIN com demo.setor"""
     response = client.get(ENDPOINT, headers=analyst_headers)
     data = response.get_json()["data"]
 
@@ -425,7 +375,6 @@ def test_nome_setor_via_join(client, analyst_headers):
 
 
 def test_protocolo_derivation(client, analyst_headers):
-    """Protocolo: MNUTRIC quando UTI (tp_segmento=1), NRS2002 caso contrário"""
     response = client.get(ENDPOINT, headers=analyst_headers)
     data = response.get_json()["data"]
 
@@ -440,69 +389,57 @@ def test_protocolo_derivation(client, analyst_headers):
 
 
 def test_imc_calculation(client, analyst_headers):
-    """IMC = peso / (altura_cm / 100)² — paciente UTI: 58 / (1.83)² ≈ 17.3"""
     response = client.get(ENDPOINT, headers=analyst_headers)
     data = response.get_json()["data"]
 
     uti = _find_patient(data, _ADM_ACTIVE_UTI)
     assert uti["peso"] == 58.0
-    # 58 / (183/100)^2 = 58 / 3.3489 ≈ 17.3
     assert uti["imc"] is not None
     assert 17.0 <= uti["imc"] <= 17.5
 
     enf = _find_patient(data, _ADM_ACTIVE_ENF)
     assert enf["peso"] == 65.0
-    # 65 / (160/100)^2 = 65 / 2.56 ≈ 25.4
     assert enf["imc"] is not None
     assert 25.0 <= enf["imc"] <= 26.0
 
 
 def test_haval_calculation(client, analyst_headers):
-    """haval: horas desde a última avaliação — UTI tem avaliação (≈3h), Enf não tem (null)"""
     response = client.get(ENDPOINT, headers=analyst_headers)
     data = response.get_json()["data"]
 
     uti = _find_patient(data, _ADM_ACTIVE_UTI)
     assert uti["haval"] is not None
-    # Evaluation was created ~3 hours ago
     assert 2.5 <= uti["haval"] <= 4.0
 
     enf = _find_patient(data, _ADM_ACTIVE_ENF)
-    assert enf["haval"] is None, "Sem avaliação → haval deve ser null"
+    assert enf["haval"] is None
 
 
 def test_d7_calculation(client, analyst_headers):
-    """d7: true quando D7 ativo com dt_prevista <= NOW()+48h"""
     response = client.get(ENDPOINT, headers=analyst_headers)
     data = response.get_json()["data"]
 
     uti = _find_patient(data, _ADM_ACTIVE_UTI)
-    assert uti["d7"] is True, "UTI tem D7 ativo vencendo em 24h"
+    assert uti["d7"] is True
 
     enf = _find_patient(data, _ADM_ACTIVE_ENF)
-    assert enf["d7"] is False, "Enf não tem D7 → false"
+    assert enf["d7"] is False
 
 
 def test_idade_and_dias(client, analyst_headers):
-    """idade: anos completos; dias: dias de internação"""
     response = client.get(ENDPOINT, headers=analyst_headers)
     data = response.get_json()["data"]
 
     uti = _find_patient(data, _ADM_ACTIVE_UTI)
-    # Born 1959-03-15, today 2026-04-10 → 67 years
     assert uti["idade"] == 67
-    # Admitted 14 days ago
     assert uti["dias"] == 14
 
     enf = _find_patient(data, _ADM_ACTIVE_ENF)
-    # Born 1990-08-22, today 2026-04-10 → 35 years
     assert enf["idade"] == 35
-    # Admitted 5 days ago
     assert enf["dias"] == 5
 
 
 def test_conduta_and_sev(client, analyst_headers):
-    """conduta: última conduta; sev: classificação da triagem"""
     response = client.get(ENDPOINT, headers=analyst_headers)
     data = response.get_json()["data"]
 
@@ -512,11 +449,10 @@ def test_conduta_and_sev(client, analyst_headers):
 
     enf = _find_patient(data, _ADM_ACTIVE_ENF)
     assert enf["conduta"] is None
-    assert enf["sev"] == "bx"  # default Sprint 0
+    assert enf["sev"] == "bx"
 
 
 def test_default_null_fields(client, analyst_headers):
-    """Campos não implementados nesta US devem retornar null/vazio"""
     response = client.get(ENDPOINT, headers=analyst_headers)
     data = response.get_json()["data"]
 
@@ -528,13 +464,7 @@ def test_default_null_fields(client, analyst_headers):
         assert isinstance(patient["inst"], list)
 
 
-# ═══════════════════════════════════════════════════════════════════
-# FILTER TESTS
-# ═══════════════════════════════════════════════════════════════════
-
-
 def test_filter_by_setor(client, analyst_headers):
-    """Filtro ?setor= retorna apenas pacientes do setor informado"""
     response = client.get(
         f"{ENDPOINT}?setor={_SETOR_UTI}", headers=analyst_headers
     )
@@ -547,7 +477,6 @@ def test_filter_by_setor(client, analyst_headers):
 
 
 def test_filter_by_setor_empty(client, analyst_headers):
-    """Filtro ?setor= com setor inexistente retorna array vazio (200 OK)"""
     response = client.get(f"{ENDPOINT}?setor=999999", headers=analyst_headers)
 
     assert response.status_code == 200
@@ -556,7 +485,6 @@ def test_filter_by_setor_empty(client, analyst_headers):
 
 
 def test_filter_by_ala_uti(client, analyst_headers):
-    """Filtro ?ala=UTI retorna apenas pacientes de setores UTI"""
     response = client.get(f"{ENDPOINT}?ala=UTI", headers=analyst_headers)
     data = response.get_json()["data"]
 
@@ -568,7 +496,6 @@ def test_filter_by_ala_uti(client, analyst_headers):
 
 
 def test_filter_by_ala_enfermaria(client, analyst_headers):
-    """Filtro ?ala=Enfermaria retorna apenas pacientes de alas não-UTI"""
     response = client.get(f"{ENDPOINT}?ala=Enfermaria", headers=analyst_headers)
     data = response.get_json()["data"]
 
@@ -580,7 +507,6 @@ def test_filter_by_ala_enfermaria(client, analyst_headers):
 
 
 def test_filter_setor_and_ala_combined(client, analyst_headers):
-    """Filtros ?setor= e ?ala= combinados funcionam corretamente"""
     response = client.get(
         f"{ENDPOINT}?setor={_SETOR_UTI}&ala=UTI", headers=analyst_headers
     )
@@ -590,4 +516,200 @@ def test_filter_setor_and_ala_combined(client, analyst_headers):
     for p in data:
         assert p["fksetor"] == _SETOR_UTI
         assert p["ala"] == "UTI"
+
+
+def test_response_total_field(client, analyst_headers):
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    body = response.get_json()
+
+    assert "total" in body
+    assert body["total"] == len(body["data"])
+
+
+def test_response_total_matches_filter(client, analyst_headers):
+    response = client.get(
+        f"{ENDPOINT}?setor={_SETOR_UTI}", headers=analyst_headers
+    )
+    body = response.get_json()
+
+    assert body["total"] == len(body["data"])
+    assert body["total"] >= 1
+
+
+def test_filter_empty_result_has_total_zero(client, analyst_headers):
+    response = client.get(f"{ENDPOINT}?setor=999999", headers=analyst_headers)
+    body = response.get_json()
+
+    assert response.status_code == 200
+    assert body["data"] == []
+    assert body["total"] == 0
+
+
+def test_response_envelope_structure(client, analyst_headers):
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    body = response.get_json()
+
+    assert set(body.keys()) == {"status", "data", "total"}
+    assert body["status"] == "success"
+    assert isinstance(body["data"], list)
+    assert isinstance(body["total"], int)
+
+
+def test_glim_fields_populated(client, analyst_headers):
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    data = response.get_json()["data"]
+
+    uti = _find_patient(data, _ADM_ACTIVE_UTI)
+    assert uti is not None
+
+    assert uti["glim_diag"] == "mod"
+    assert "perda_peso" in uti["glim_fen"]
+    assert "baixo_imc" in uti["glim_fen"]
+    assert "inflamacao" in uti["glim_etiol"]
+
+
+def test_glim_defaults_when_no_data(client, analyst_headers):
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    data = response.get_json()["data"]
+
+    enf = _find_patient(data, _ADM_ACTIVE_ENF)
+    assert enf is not None
+
+    assert enf["glim_diag"] is None
+    assert enf["glim_fen"] == []
+    assert enf["glim_etiol"] == []
+
+
+def test_imc_null_when_data_missing(client, analyst_headers):
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    data = response.get_json()["data"]
+
+    no_weight = _find_patient(data, _ADM_NO_WEIGHT)
+    assert no_weight is not None
+    assert no_weight["imc"] is None
+    assert no_weight["peso"] is None
+
+
+def test_no_weight_patient_is_active(client, analyst_headers):
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    data = response.get_json()["data"]
+
+    ids = [p["id"] for p in data]
+    assert _ADM_NO_WEIGHT in ids
+
+
+def test_field_types_validation(client, analyst_headers):
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    data = response.get_json()["data"]
+
+    uti = _find_patient(data, _ADM_ACTIVE_UTI)
+    assert uti is not None
+
+    assert isinstance(uti["id"], int)
+    assert isinstance(uti["fksetor"], int)
+    assert isinstance(uti["idade"], int)
+    assert isinstance(uti["dias"], int)
+    assert isinstance(uti["pri"], int)
+
+    assert isinstance(uti["leito"], str)
+    assert isinstance(uti["ala"], str)
+    assert isinstance(uti["nome_setor"], str)
+    assert isinstance(uti["protocolo"], str)
+    assert isinstance(uti["sev"], str)
+
+    assert isinstance(uti["peso"], (int, float))
+    assert isinstance(uti["imc"], (int, float))
+    assert isinstance(uti["haval"], (int, float))
+
+    assert isinstance(uti["al_ok"], bool)
+    assert isinstance(uti["d7"], bool)
+
+    assert isinstance(uti["glim_fen"], list)
+    assert isinstance(uti["glim_etiol"], list)
+    assert isinstance(uti["inst"], list)
+    assert isinstance(uti["hist"], list)
+
+
+def test_nullable_fields_allow_none(client, analyst_headers):
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    data = response.get_json()["data"]
+
+    enf = _find_patient(data, _ADM_ACTIVE_ENF)
+    assert enf is not None
+
+    assert enf["haval"] is None
+    assert enf["conduta"] is None
+    assert enf["glim_diag"] is None
+    assert enf["dieta"] is None
+    assert enf["npo"] is None
+    assert enf["alergia"] is None
+    assert enf["campo1"] is None
+
+
+def test_al_ok_true_when_alergia_null(client, analyst_headers):
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    data = response.get_json()["data"]
+
+    for patient in data:
+        assert patient["alergia"] is None
+        assert patient["al_ok"] is True
+
+
+def test_pri_field_is_positive_integer(client, analyst_headers):
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    data = response.get_json()["data"]
+
+    for patient in data:
+        assert isinstance(patient["pri"], int)
+        assert patient["pri"] >= 1
+
+
+def test_pri_field_sequential(client, analyst_headers):
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    data = response.get_json()["data"]
+
+    pris = sorted([p["pri"] for p in data])
+    expected = list(range(1, len(data) + 1))
+    assert pris == expected
+
+
+def test_dieta_npo_null_this_us(client, analyst_headers):
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    data = response.get_json()["data"]
+
+    for patient in data:
+        assert patient["dieta"] is None
+        assert patient["npo"] is None
+
+
+def test_hist_empty_this_us(client, analyst_headers):
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    data = response.get_json()["data"]
+
+    for patient in data:
+        assert patient["hist"] == []
+
+
+def test_inst_empty_this_us(client, analyst_headers):
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    data = response.get_json()["data"]
+
+    for patient in data:
+        assert patient["inst"] == []
+
+
+def test_filter_ala_case_insensitive(client, analyst_headers):
+    response_upper = client.get(f"{ENDPOINT}?ala=UTI", headers=analyst_headers)
+    response_lower = client.get(f"{ENDPOINT}?ala=uti", headers=analyst_headers)
+
+    data_upper = response_upper.get_json()["data"]
+    data_lower = response_lower.get_json()["data"]
+
+    assert response_upper.status_code == 200
+    assert response_lower.status_code == 200
+    assert len(data_upper) == len(data_lower)
+
+    ids_upper = sorted([p["id"] for p in data_upper])
+    ids_lower = sorted([p["id"] for p in data_lower])
+    assert ids_upper == ids_lower
 

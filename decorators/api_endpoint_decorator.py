@@ -54,7 +54,10 @@ def api_endpoint(download_headers=None, is_admin=False):
                         response.headers[header_name] = header_value
                     return response
 
-                return {"status": "success", "data": result}, status.HTTP_200_OK
+                response = {"status": "success", "data": result}
+                if isinstance(result, list):
+                    response["total"] = len(result)
+                return response, status.HTTP_200_OK
 
             except (JWTExtendedException, PyJWTError):
                 db.session.rollback()
