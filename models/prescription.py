@@ -99,6 +99,8 @@ class Patient(db.Model):
     id_icd = db.Column("idcid", db.String, nullable=True)
     dischargeDateForecast = db.Column("dt_alta_prevista", db.DateTime, nullable=True)
     city = db.Column("cidade", db.String, nullable=True)
+    fksetor = db.Column("fksetor", db.Integer, nullable=True)
+    bed = db.Column("leito", db.String(32), nullable=True)
 
 
 class PatientAudit(db.Model):

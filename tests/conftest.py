@@ -108,6 +108,11 @@ def _cleanup():
         )
     )
 
+    session.execute(
+        text("DELETE FROM demo.nutricional_nrs WHERE nratendimento >= 100000")
+    )
+    session.execute(text("DELETE FROM demo.triagem WHERE nratendimento >= 100000"))
+
     session_commit()
     pass
 
