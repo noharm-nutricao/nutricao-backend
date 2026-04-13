@@ -273,9 +273,10 @@ def get_patient_mnutric(admission_number: int):
     event = patient_repository.get_patient_mnutric(admissionNumber=admission_number)
     
     patient = Patient()
-    patient.birthdate     = event.birthdate
-    patient.id_icd        = event.id_icd or ''
-    patient.admissionDate = event.admissionDate
+    patient.admissionNumber = event.admissionNumber
+    patient.birthdate       = event.birthdate
+    patient.id_icd          = event.id_icd or ''
+    patient.admissionDate   = event.admissionDate
     
     return patient
 

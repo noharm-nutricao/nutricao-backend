@@ -20,12 +20,10 @@ def get_patients():
         raise Exception("Estamos com problemas para consultar pacientes em nossa base, tente novamente mais tarde")
 
 
-def save_manual_mnutric(admission_number: int, apache: int, sofa: int, total: int | None = None):
+def save_manual_mnutric(admission_number: int, mnutric: dict):
     return nutritional_repository.save_manual_mnutric(
         admission_number=admission_number,
-        apache=apache,
-        sofa=sofa,
-        total=total,
+        mnutric=mnutric,
     )
 
 def calculate_mnutric(patient, apache, sofa) -> dict:
@@ -34,22 +32,27 @@ def calculate_mnutric(patient, apache, sofa) -> dict:
     dados_incompletos = (apache is None) or (sofa is None)
 
     mnutric_age       = _mnutric_age(patient.birthdate)
-    mnutric_apache    = _mnutric_apache_ii(apache) if apache is not None else None
-    mnutric_sofa      = _mnutric_sofa(sofa) if sofa is not None else None
+    mnutric_apache    = _mnutric_apache_ii(apache) if apache is not None else 0
+    mnutric_sofa      = _mnutric_sofa(sofa) if sofa is not None else 0
     mnutric_comorbity = _mnutric_comorbity(patient.id_icd)
     mnutric_days_uti  = _mnutric_days_uti(uti_days)
-    mnutric           = (mnutric_age + (mnutric_apache or 0) + (mnutric_sofa or 0) + mnutric_comorbity + mnutric_days_uti)
+    mnutric           = (mnutric_age + mnutric_apache + mnutric_sofa + mnutric_comorbity + mnutric_days_uti)
 
-    return {
-        "total": mnutric,
-        "age": mnutric_age,
-        "apache": mnutric_apache,
-        "sofa": mnutric_sofa,
+    result = {
+        "total"    : mnutric,
+        "age"      : mnutric_age,
+        "apache"   : mnutric_apache,
+        "sofa"     : mnutric_sofa,
         "comorbity": mnutric_comorbity,
-        "daysUTI": mnutric_days_uti,
-        "classify": _mnutric_clasify(mnutric) if not dados_incompletos else None,
+        "daysUTI"  : mnutric_days_uti,
+        "classify" : _mnutric_clasify(mnutric) if not dados_incompletos else None,
         "dados_incompletos": dados_incompletos,
     }
+
+    if getattr(patient, "admissionNumber", None) is not None:
+        save_manual_mnutric(admission_number=patient.admissionNumber, mnutric=result)
+
+    return result
 
 def _mnutric_age(birthDate) -> int:
     mnutric_age = 0

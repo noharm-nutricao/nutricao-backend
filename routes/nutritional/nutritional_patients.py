@@ -47,39 +47,22 @@ def get_patients():
 def calculate_mnutric(nratendimento):
     data = request.get_json(silent=True) or {}
 
-    apache = _validate_required_manual_score(
-        data,
-        "apache_ii",
-        APACHE_II_MIN,
-    )
-    sofa = _validate_required_manual_score(
-        data,
-        "sofa",
-        SOFA_MIN,
-    )
-    patient = patient_service.get_patient_mnutric(nratendimento)
+    # validation guards
+    apache = _validate_required_manual_score(data, "apache_ii", APACHE_II_MIN)
+    sofa   = _validate_required_manual_score(data, "sofa", SOFA_MIN)
 
-    mnutric = nutritional_patient_service.calculate_mnutric(
-        patient,
-        apache,
-        sofa,
-    )
-    nutritional_patient_service.save_manual_mnutric(
-        admission_number=nratendimento,
-        apache=apache,
-        sofa=sofa,
-        total=mnutric["total"],
-    )
+    patient = patient_service.get_patient_mnutric(nratendimento)
+    mnutric = nutritional_patient_service.calculate_mnutric(patient, apache, sofa)
 
     return {
         "dados_incompletos": mnutric["dados_incompletos"],
         "mn_total": mnutric["total"],
         "mn_dims": {
-            "idade": mnutric["age"],
+            "idade" : mnutric["age"],
             "apache": mnutric["apache"],
-            "sofa": mnutric["sofa"],
-            "comor": mnutric["comorbity"],
-            "dias": mnutric["daysUTI"],
+            "sofa"  : mnutric["sofa"],
+            "comor" : mnutric["comorbity"],
+            "dias"  : mnutric["daysUTI"],
         },
         "classificacao": mnutric["classify"],
     }
