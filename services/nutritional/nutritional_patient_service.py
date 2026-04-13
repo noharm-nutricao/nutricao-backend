@@ -19,6 +19,15 @@ def get_patients():
 
         raise Exception("Estamos com problemas para consultar pacientes em nossa base, tente novamente mais tarde")
 
+
+def save_manual_mnutric(admission_number: int, apache: int, sofa: int, total: int | None = None):
+    return nutritional_repository.save_manual_mnutric(
+        admission_number=admission_number,
+        apache=apache,
+        sofa=sofa,
+        total=total,
+    )
+
 def calculate_mnutric(patient, apache, sofa) -> dict:
     today    = datetime.now()
     uti_days = (today.date() - patient.admissionDate.date()).days

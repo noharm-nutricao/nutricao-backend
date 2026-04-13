@@ -59,7 +59,17 @@ def calculate_mnutric(nratendimento):
     )
     patient = patient_service.get_patient_mnutric(nratendimento)
 
-    mnutric = nutritional_patient_service.calculate_mnutric(patient, apache, sofa)
+    mnutric = nutritional_patient_service.calculate_mnutric(
+        patient,
+        apache,
+        sofa,
+    )
+    nutritional_patient_service.save_manual_mnutric(
+        admission_number=nratendimento,
+        apache=apache,
+        sofa=sofa,
+        total=mnutric["total"],
+    )
 
     return {
         "dados_incompletos": mnutric["dados_incompletos"],

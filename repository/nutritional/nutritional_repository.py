@@ -1,18 +1,49 @@
-"""Nutritional repository.
-
-Data access layer for the nutritional module. Queries the NoHarm schema
-tables (pessoa, segmentosetor, segmento) to retrieve patient data needed
-for nutritional score calculations.
-"""
-
-from sqlalchemy import text
-
-from models.enums import SegmentTypeEnum
 from models.main import db
+from models.nutritional.nutritional import NutritionalTriage
 
 def get_patients_repository():
     #toDO
     pass
+
+
+def _ensure_nutritional_triage_table():
+    connection = db.session.connection()
+    NutritionalTriage.__table__.create(bind=connection, checkfirst=True)
+
+    schema = connection.get_execution_options().get("schema_translate_map", {}).get(None)
+    table_name = f"{schema}.nutricional_triagem" if schema else "nutricional_triagem"
+
+    connection.execute(
+        text(
+            f"ALTER TABLE {table_name} "
+            "ADD COLUMN IF NOT EXISTS mn_total INTEGER"
+        )
+    )
+
+
+def save_manual_mnutric(admission_number: int, apache: int, sofa: int, total: int | None = None):
+    _ensure_nutritional_triage_table()
+
+    triage = (
+        db.session.query(NutritionalTriage)
+        .filter(NutritionalTriage.admissionNumber == admission_number)
+        .first()
+    )
+
+    if triage is None:
+        triage = NutritionalTriage()
+        triage.admissionNumber = admission_number
+        db.session.add(triage)
+
+    triage.apache = apache
+    triage.sofa = sofa
+    triage.total = total
+    triage.apacheManual = True
+    triage.sofaManual = True
+
+    db.session.flush()
+
+    return triage
 
 def get_active_admissions():
     """Return all active admissions with ICU protocol flag.

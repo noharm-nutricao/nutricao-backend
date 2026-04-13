@@ -3,11 +3,15 @@
 from unittest.mock import patch
 
 import pytest
+from sqlalchemy import text
 
 from exception.validation_error import ValidationError
+from models.nutritional.nutritional import NutritionalTriage
+from tests.conftest import session
 from utils import status
 
-CURRENT_ENDPOINT = "/nutritional/patients/123456/mnutric-manual"
+REAL_ADMISSION_NUMBER = 1
+CURRENT_ENDPOINT = f"/nutritional/patients/{REAL_ADMISSION_NUMBER}/mnutric-manual"
 
 
 def _payload(apache_ii=22, sofa=8):
@@ -20,19 +24,6 @@ def _put_mnutric_manual(client, headers=None, payload=None):
         headers=headers,
         json=_payload() if payload is None else payload,
     )
-
-
-def _success_result():
-    return {
-        "total": 7,
-        "age": 2,
-        "apache": 2,
-        "sofa": 1,
-        "comorbity": 1,
-        "daysUTI": 1,
-        "classify": "cr",
-        "dados_incompletos": False,
-    }
 
 
 def _expected_response_data(result, dados_incompletos):
@@ -69,39 +60,63 @@ def test_put_mnutric_requires_authorization(client, request, headers_fixture_nam
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
-@pytest.mark.parametrize(
-    ("service_result", "payload", "expected_data"),
-    [
-        pytest.param(
-            _success_result(),
-            _payload(),
-            _expected_response_data(_success_result(), False),
-            id="complete-result",
+def _cleanup_manual_triage(admission_number):
+    session.execute(
+        text(
+            "DO $$ "
+            "BEGIN "
+            "IF EXISTS ("
+            "    SELECT 1 FROM information_schema.tables "
+            "    WHERE table_schema = 'demo' AND table_name = 'nutricional_triagem'"
+            ") THEN "
+            "    DELETE FROM demo.nutricional_triagem WHERE nratendimento = :admission_number; "
+            "END IF; "
+            "END $$;"
         ),
-    ],
-)
-def test_put_mnutric_returns_expected_payload(
-    client,
-    analyst_headers,
-    service_result,
-    payload,
-    expected_data,
-):
-    """PUT /nutritional/patients/:nratendimento/mnutric-manual - retorna payload esperado para cenários de sucesso"""
-    with patch(
-        "routes.nutritional.nutritional_patients.patient_service.get_patient_mnutric",
-        return_value=object(),
-    ), patch(
-        "routes.nutritional.nutritional_patients.nutritional_patient_service.calculate_mnutric",
-        return_value=service_result,
-    ):
-        response = _put_mnutric_manual(client, headers=analyst_headers, payload=payload)
+        {"admission_number": admission_number},
+    )
+    session.commit()
+    session.connection(execution_options={"schema_translate_map": {None: "demo"}})
+
+
+def test_put_mnutric_persists_manual_scores_and_recalculates(client, analyst_headers):
+    """PUT /nutritional/patients/:nratendimento/mnutric-manual - persiste os scores manuais e recalcula com paciente real"""
+    payload = _payload(apache_ii=22, sofa=8)
+
+    _cleanup_manual_triage(REAL_ADMISSION_NUMBER)
+
+    response = _put_mnutric_manual(client, headers=analyst_headers, payload=payload)
 
     body = response.get_json()
 
     assert response.status_code == status.HTTP_200_OK
     assert body["status"] == "success"
-    assert body["data"] == expected_data
+    assert body["data"] == {
+        "dados_incompletos": False,
+        "mn_total": 4,
+        "mn_dims": {
+            "idade": 0,
+            "apache": 2,
+            "sofa": 1,
+            "comor": 0,
+            "dias": 1,
+        },
+        "classificacao": "md",
+    }
+
+    session.expire_all()
+    triage = (
+        session.query(NutritionalTriage)
+        .filter(NutritionalTriage.admissionNumber == REAL_ADMISSION_NUMBER)
+        .first()
+    )
+
+    assert triage is not None
+    assert triage.apache == payload["apache_ii"]
+    assert triage.sofa == payload["sofa"]
+    assert triage.total == body["data"]["mn_total"]
+    assert triage.apacheManual is True
+    assert triage.sofaManual is True
 
 
 @pytest.mark.parametrize(
@@ -169,7 +184,7 @@ def test_put_mnutric_rejects_invalid_processes(
     calculate_patch_kwargs = (
         {"side_effect": exception}
         if raise_from == "calculate"
-        else {"return_value": _success_result()}
+        else {"return_value": {"dados_incompletos": False}}
     )
 
     with patch(
