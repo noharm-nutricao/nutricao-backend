@@ -1,8 +1,9 @@
+from sqlalchemy import func
 from sqlalchemy.dialects import postgresql
 
 from app.extensions import db
 
-class NutricionalNrs(db.Model):
+class NutritionalNrs(db.Model):
     __tablename__ = "nutricional_nrs"
 
     id = db.Column("id", db.Integer, primary_key=True)
@@ -16,11 +17,11 @@ class NutricionalNrs(db.Model):
     score_gravidade = db.Column("score_gravidade", db.Integer, nullable=False)
     idade_maior_70 = db.Column("idade_maior_70", db.Boolean, nullable=False)
 
-    updated_at = db.Column("updated_at", db.DateTime, nullable=True)
+    updated_at = db.Column("updated_at", db.DateTime, nullable=True, onupdate=func.now())
     created_at = db.Column("created_at", db.DateTime, nullable=True)
 
 
-class NutricionalScreening(db.Model):
+class NutritionalScreening(db.Model):
     __tablename__ = "nutricional_triagem"
 
     id = db.Column("id", db.Integer, primary_key=True)
@@ -46,11 +47,11 @@ class NutricionalScreening(db.Model):
     classificacao = db.Column("classificacao", db.String, nullable=True)
     calculado_at = db.Column("calculado_at", db.DateTime, nullable=True)
     created_at = db.Column("created_at", db.DateTime, nullable=True)
-    updated_at = db.Column("updated_at", db.DateTime, nullable=True)
+    updated_at = db.Column("updated_at", db.DateTime, nullable=True, onupdate=func.now())
 
 
-class NutricionalGlim(db.Model):
-    __tablename__ = "nutritional_glim"
+class NutritionalGlim(db.Model):
+    __tablename__ = "nutricional_glim"
 
     id = db.Column("id", db.Integer, primary_key=True)
     nratendimento = db.Column("nratendimento", db.BigInteger, nullable=False)
@@ -60,7 +61,7 @@ class NutricionalGlim(db.Model):
     observacao = db.Column("observacao", postgresql.TEXT, nullable=True)
     idusuario = db.Column("idusuario", db.Integer, nullable=True)
     created_at = db.Column("created_at", db.DateTime, nullable=True)
-    updated_at = db.Column("updated_at", db.DateTime, nullable=True)
+    updated_at = db.Column("updated_at", db.DateTime, nullable=True, onupdate=func.now())
 
 
 class NutritionalAssessment(db.Model):
@@ -77,8 +78,8 @@ class NutritionalAssessment(db.Model):
     created_at = db.Column("created_at", db.DateTime, nullable=True)
 
 
-class NutricionalD7(db.Model):
-    __tablename__ = "nutritional_d7"
+class NutritionalD7(db.Model):
+    __tablename__ = "nutricional_d7"
 
     id = db.Column("id", db.Integer, primary_key=True)
     nratendimento = db.Column("nratendimento", db.BigInteger, nullable=False)
@@ -88,8 +89,8 @@ class NutricionalD7(db.Model):
     created_at = db.Column("created_at", db.DateTime, nullable=True)
 
 
-class NutrcionalAlert(db.Model):
-    __tablename__ = "nutritional_alerta"
+class NutrtionalAlert(db.Model):
+    __tablename__ = "nutricional_alerta"
 
     id = db.Column("id", db.Integer, primary_key=True)
     nratendimento = db.Column("nratendimento", db.BigInteger, nullable=False)
