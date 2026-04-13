@@ -24,6 +24,8 @@ def _put_mnutric_manual(client, headers=None, payload=None):
 
 
 def _classify_total(total):
+    if total < 0:
+        return "unknown"
     if total <= 2:
         return "bx"
     if total <= 4:
@@ -158,4 +160,4 @@ def test_put_mnutric_rejects_invalid_manual_scores(client, analyst_headers, payl
     body = response.get_json()
 
     assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert body["status"] == "error"
+    assert body["status"]       == "error"

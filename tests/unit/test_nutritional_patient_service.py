@@ -54,10 +54,10 @@ def _patient(age, id_icd, admission_days_ago):
                 "sofa": 0,
                 "comorbity": 0,
                 "daysUTI": 0,
-                "classify": "unknown",
+                "classify": "bx",
                 "dados_incompletos": False,
             },
-            id="total-0-unknown",
+            id="total-0-bx",
         ),
         pytest.param(
             52,

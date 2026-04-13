@@ -27,8 +27,8 @@ def save_manual_mnutric(admission_number: int, mnutric: dict):
     )
 
 def calculate_mnutric(patient, apache, sofa) -> dict:
-    today    = datetime.now()
-    uti_days = (today.date() - patient.admissionDate.date()).days
+    today             = datetime.now()
+    uti_days          = (today.date() - patient.admissionDate.date()).days
     dados_incompletos = (apache is None) or (sofa is None)
 
     mnutric_age       = _mnutric_age(patient.birthdate)
@@ -39,13 +39,13 @@ def calculate_mnutric(patient, apache, sofa) -> dict:
     mnutric           = (mnutric_age + mnutric_apache + mnutric_sofa + mnutric_comorbity + mnutric_days_uti)
 
     result = {
-        "total"    : mnutric,
-        "age"      : mnutric_age,
-        "apache"   : mnutric_apache,
-        "sofa"     : mnutric_sofa,
-        "comorbity": mnutric_comorbity,
-        "daysUTI"  : mnutric_days_uti,
-        "classify" : _mnutric_clasify(mnutric) if not dados_incompletos else None,
+        "total"            : mnutric,
+        "age"              : mnutric_age,
+        "apache"           : mnutric_apache,
+        "sofa"             : mnutric_sofa,
+        "comorbity"        : mnutric_comorbity,
+        "daysUTI"          : mnutric_days_uti,
+        "classify"         : _mnutric_clasify(mnutric) if not dados_incompletos else None,
         "dados_incompletos": dados_incompletos,
     }
 
@@ -84,6 +84,7 @@ def _mnutric_sofa(sofa) -> int:
         mnutric_sofa = 2
     return mnutric_sofa
 
+#TODO: verify if we can have in a single string more than one cid from patient
 def _mnutric_comorbity(comorbity) -> int:
     mnutric_comorbity = 0
     if comorbity:
@@ -97,7 +98,7 @@ def _mnutric_days_uti(days_uti) -> int:
     return mnutric_days_uti
 
 def _mnutric_clasify(mnutric: int) -> str:
-    if mnutric > 0 and mnutric <= 2:
+    if mnutric >= 0 and mnutric <= 2:
         return "bx"
     elif mnutric >= 3 and mnutric <= 4:
         return "md"
