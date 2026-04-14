@@ -2,12 +2,14 @@ from datetime import datetime
 import re
 from typing import Any, Callable, Optional
 import unicodedata
+from models.enums import SegmentTypeEnum
 from models.nutritional import NutritionalNrs, NutritionalScreening
 from models.prescription import Patient
 from repository.nutritional.nutritional_nrs_repository import (
     get_cid_mappings_cached,
     get_nrs_assessment,
     get_or_create_triagem,
+    get_patient_segment_type,
     get_patient_department,
     update_triagem,
 )
@@ -71,14 +73,23 @@ def is_uti_helper(patient_department: str) -> bool:
 
 
 def is_uti_wrapper(
-    nratendimento: int, get_patient_department_fn: Callable[[int], Optional[str]]
+    nratendimento: int,
+    get_patient_segment_type_fn: Callable[[int], Optional[int]],
+    get_patient_department_fn: Callable[[int], Optional[str]],
 ) -> bool:
+    segment_type: Optional[int] = get_patient_segment_type_fn(nratendimento)
+    if segment_type is not None:
+        return segment_type == SegmentTypeEnum.ICU.value
     department: Optional[str] = get_patient_department_fn(nratendimento)
     return is_uti_helper(department)
 
 
 def is_uti(nratendimento: int) -> bool:
-    return is_uti_wrapper(nratendimento, get_patient_department)
+    return is_uti_wrapper(
+        nratendimento,
+        get_patient_segment_type,
+        get_patient_department,
+    )
 
 
 def score_nrs_component_b(nratendimento: int, cid: str) -> int:

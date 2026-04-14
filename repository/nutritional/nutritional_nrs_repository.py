@@ -9,6 +9,7 @@ from models.appendix import Department
 from models.main import db
 from models.prescription import Prescription
 from models.nutritional import NutritionalNrs, NutritionalScreening
+from models.segment import Segment
 from services.nutritional.nutritional_dtos import CidMappings, NrsScoreDTO
 
 
@@ -109,6 +110,23 @@ def _get_patient_department(session: Session, nratendimento: int) -> Optional[st
     )
     return row.name if row else None
 
+def get_patient_segment_type(nratendimento: int) -> Optional[int]:
+    return _get_patient_segment_type(db.session, nratendimento)
+
+
+def _get_patient_segment_type(session: Session, nratendimento: int) -> Optional[int]:
+    row: Row = (
+        session.query(Segment.type)
+        .join(
+            Prescription,
+            Segment.id == Prescription.idSegment,
+        )
+        .filter(Prescription.admissionNumber == nratendimento)
+        .order_by(Prescription.date.desc())
+        .limit(1)
+        .first()
+    )
+    return row.type if row else None
 
 def get_nutricional_cid_override(session: Session) -> list[tuple[str, int]]:
     rows = session.execute(db.text("""

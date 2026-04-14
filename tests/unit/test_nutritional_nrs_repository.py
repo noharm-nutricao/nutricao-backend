@@ -57,6 +57,18 @@ def test_get_patient_department_delegates_to_internal(monkeypatch: pytest.Monkey
     internal.assert_called_once_with(repo.db.session, 9)
 
 
+def test_get_patient_segment_type_delegates_to_internal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    internal = MagicMock(return_value=3)
+    monkeypatch.setattr(repo, "_get_patient_segment_type", internal)
+
+    result = repo.get_patient_segment_type(9)
+
+    assert result == 3
+    internal.assert_called_once_with(repo.db.session, 9)
+
+
 # Internal query builders
 
 def test_get_nrs_assessment_internal_builds_query_chain() -> None:
@@ -169,6 +181,34 @@ def test_get_patient_department_internal_returns_none_when_missing() -> None:
     limited.first.return_value = None
 
     result = repo._get_patient_department(session, 1002)
+
+    assert result is None
+
+
+def test_get_patient_segment_type_internal_returns_type() -> None:
+    session = MagicMock()
+    query = session.query.return_value
+    joined = query.join.return_value
+    filtered = joined.filter.return_value
+    ordered = filtered.order_by.return_value
+    limited = ordered.limit.return_value
+    limited.first.return_value = SimpleNamespace(type=3)
+
+    result = repo._get_patient_segment_type(session, 1001)
+
+    assert result == 3
+
+
+def test_get_patient_segment_type_internal_returns_none_when_missing() -> None:
+    session = MagicMock()
+    query = session.query.return_value
+    joined = query.join.return_value
+    filtered = joined.filter.return_value
+    ordered = filtered.order_by.return_value
+    limited = ordered.limit.return_value
+    limited.first.return_value = None
+
+    result = repo._get_patient_segment_type(session, 1002)
 
     assert result is None
 

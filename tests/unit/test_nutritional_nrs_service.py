@@ -128,21 +128,47 @@ def test_is_uti_helper_parametrized(department: str, expected: bool) -> None:
 
 # 4) is_uti_wrapper
 
-def test_is_uti_wrapper_calls_dependency_and_returns_true() -> None:
-    get_department_fn = MagicMock(return_value="UTI adulto")
+def test_is_uti_wrapper_returns_true_when_segment_is_icu() -> None:
+    get_segment_type_fn = MagicMock(return_value=3)
+    get_department_fn = MagicMock()
 
-    result = svc.is_uti_wrapper(321, get_department_fn)
+    result = svc.is_uti_wrapper(321, get_segment_type_fn, get_department_fn)
 
     assert result is True
+    get_segment_type_fn.assert_called_once_with(321)
+    get_department_fn.assert_not_called()
+
+
+def test_is_uti_wrapper_returns_false_when_segment_is_not_icu() -> None:
+    get_segment_type_fn = MagicMock(return_value=1)
+    get_department_fn = MagicMock()
+
+    result = svc.is_uti_wrapper(321, get_segment_type_fn, get_department_fn)
+
+    assert result is False
+    get_segment_type_fn.assert_called_once_with(321)
+    get_department_fn.assert_not_called()
+
+
+def test_is_uti_wrapper_falls_back_to_department_when_segment_missing() -> None:
+    get_segment_type_fn = MagicMock(return_value=None)
+    get_department_fn = MagicMock(return_value="UTI adulto")
+
+    result = svc.is_uti_wrapper(321, get_segment_type_fn, get_department_fn)
+
+    assert result is True
+    get_segment_type_fn.assert_called_once_with(321)
     get_department_fn.assert_called_once_with(321)
 
 
-def test_is_uti_wrapper_returns_false_when_department_missing() -> None:
+def test_is_uti_wrapper_fallback_returns_false_when_department_missing() -> None:
+    get_segment_type_fn = MagicMock(return_value=None)
     get_department_fn = MagicMock(return_value=None)
 
-    result = svc.is_uti_wrapper(321, get_department_fn)
+    result = svc.is_uti_wrapper(321, get_segment_type_fn, get_department_fn)
 
     assert result is False
+    get_segment_type_fn.assert_called_once_with(321)
 
 
 # 5) is_uti
@@ -154,7 +180,11 @@ def test_is_uti_delegates_to_wrapper(monkeypatch: pytest.MonkeyPatch) -> None:
     result = svc.is_uti(99)
 
     assert result is True
-    wrapper_mock.assert_called_once_with(99, svc.get_patient_department)
+    wrapper_mock.assert_called_once_with(
+        99,
+        svc.get_patient_segment_type,
+        svc.get_patient_department,
+    )
 
 
 # 6) score_nrs_component_b
