@@ -39,6 +39,18 @@ def save_manual_mnutric(admission_number: int, mnutric: dict):
 
     return screening
 
+def get_saved_mnutric(admission_number: int):
+    if not _is_nutritional_screening_table_ready():
+        return None
+
+    return (
+        db.session.query(NutritionalScreening)
+        .filter(NutritionalScreening.nratendimento == admission_number)
+        .filter(NutritionalScreening.protocolo == "MNUTRIC")
+        .order_by(NutritionalScreening.id.desc())
+        .first()
+    )
+
 def get_active_admissions():
     """Return all active admissions with ICU protocol flag.
 

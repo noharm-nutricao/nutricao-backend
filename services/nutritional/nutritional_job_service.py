@@ -17,7 +17,9 @@ from concurrent.futures import TimeoutError as FuturesTimeoutError
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from config import Config
+from models.main import db
 from repository.nutritional import nutritional_repository
+from services.nutritional import nutritional_patient_service
 
 logger = logging.getLogger("noharm.nutritional")
 
@@ -38,14 +40,15 @@ def recalculate_nutritional_scores():
     for patient in patients:
         try:
             if patient.is_icu:
-                # TODO (US-BE-05): nutritional_score_service.recalculate_mnutric(patient)
-                pass
+                nutritional_patient_service.recalculate_mnutric(patient)
             else:
                 # TODO (US-BE-04): nutritional_score_service.recalculate_nrs(patient)
                 pass
 
+            db.session.commit()
             processed += 1
         except Exception as e:
+            db.session.rollback()
             logger.error(
                 "Erro ao recalcular nratendimento=%s: %s",
                 patient.nratendimento,

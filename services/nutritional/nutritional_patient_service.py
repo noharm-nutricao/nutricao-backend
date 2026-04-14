@@ -108,3 +108,19 @@ def _mnutric_clasify(mnutric: int) -> str:
         return "cr"
     else:
         return "unknown"
+
+def recalculate_mnutric(patient):
+    from services import patient_service
+
+    admission_number = getattr(patient, "nratendimento", None)
+    birthdate = getattr(patient, "dtnascimento", None)
+    admission_date = getattr(patient, "dtinternacao", None)
+
+    if (admission_number is None) or (birthdate is None) or (admission_date is None):
+        return None
+
+    screening = nutritional_repository.get_saved_mnutric(admission_number)
+    apache = getattr(screening, "mn_apache", None)
+    sofa = getattr(screening, "mn_sofa", None)
+
+    return calculate_mnutric(patient=patient, apache=apache, sofa=sofa)
