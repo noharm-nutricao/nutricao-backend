@@ -3,7 +3,7 @@
 import pytest
 from sqlalchemy import text
 
-from models.nutritional.nutritional import NutritionalTriage
+from models.nutritional import NutritionalScreening
 from tests.conftest import session
 from utils import status
 
@@ -35,7 +35,7 @@ def _classify_total(total):
     return "cr"
 
 
-def _is_nutritional_triage_table_ready():
+def _is_nutritional_screening_table_ready():
     table_exists = bool(
         session.execute(
             text(
@@ -118,26 +118,26 @@ def test_put_mnutric_persists_manual_scores_and_recalculates(client, analyst_hea
     assert body["data"]["classificacao"]     == _classify_total(body["data"]["mn_total"])
 
     # only test these fields if we are ready to use them
-    if _is_nutritional_triage_table_ready():
+    if _is_nutritional_screening_table_ready():
         session.expire_all()
-        triage = (
-            session.query(NutritionalTriage)
-            .filter(NutritionalTriage.admissionNumber == REAL_ADMISSION_NUMBER)
-            .filter(NutritionalTriage.protocol == "MNUTRIC")
-            .order_by(NutritionalTriage.id.desc())
+        screening = (
+            session.query(NutritionalScreening)
+            .filter(NutritionalScreening.nratendimento == REAL_ADMISSION_NUMBER)
+            .filter(NutritionalScreening.protocolo == "MNUTRIC")
+            .order_by(NutritionalScreening.id.desc())
             .first()
         )
 
-        assert triage is not None
-        assert triage.age            == body["data"]["mn_dims"]["idade"]
-        assert triage.apache         == body["data"]["mn_dims"]["apache"]
-        assert triage.sofa           == body["data"]["mn_dims"]["sofa"]
-        assert triage.comorbidity    == body["data"]["mn_dims"]["comor"]
-        assert triage.days           == body["data"]["mn_dims"]["dias"]
-        assert triage.total          == body["data"]["mn_total"]
-        assert triage.classification == body["data"]["classificacao"]
-        assert triage.apacheManual is True
-        assert triage.sofaManual   is True
+        assert screening is not None
+        assert screening.mn_idade == body["data"]["mn_dims"]["idade"]
+        assert screening.mn_apache == body["data"]["mn_dims"]["apache"]
+        assert screening.mn_sofa == body["data"]["mn_dims"]["sofa"]
+        assert screening.mn_comor == body["data"]["mn_dims"]["comor"]
+        assert screening.mn_dias == body["data"]["mn_dims"]["dias"]
+        assert screening.mn_total == body["data"]["mn_total"]
+        assert screening.classificacao == body["data"]["classificacao"]
+        assert screening.mn_apache_manual is True
+        assert screening.mn_sofa_manual is True
 
 
 @pytest.mark.parametrize(

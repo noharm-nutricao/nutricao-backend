@@ -1,40 +1,43 @@
+from sqlalchemy import text
+
+from models.enums import SegmentTypeEnum
 from models.main import db
-from models.nutritional.nutritional import NutritionalTriage
+from models.nutritional import NutritionalScreening
 
 def get_patients_repository():
     #toDO
     pass
 
 def save_manual_mnutric(admission_number: int, mnutric: dict):
-    if not _is_nutritional_triage_table_ready():
+    if not _is_nutritional_screening_table_ready():
         return None
 
-    triage = (
-        db.session.query(NutritionalTriage)
-        .filter(NutritionalTriage.admissionNumber == admission_number)
-        .filter(NutritionalTriage.protocol == "MNUTRIC")
+    screening = (
+        db.session.query(NutritionalScreening)
+        .filter(NutritionalScreening.nratendimento == admission_number)
+        .filter(NutritionalScreening.protocolo == "MNUTRIC")
         .first()
     )
 
-    if triage is None:
-        triage = NutritionalTriage()
-        triage.admissionNumber = admission_number
-        triage.protocol = "MNUTRIC"
-        db.session.add(triage)
+    if screening is None:
+        screening = NutritionalScreening()
+        screening.nratendimento = admission_number
+        screening.protocolo = "MNUTRIC"
+        db.session.add(screening)
 
-    triage.age            = mnutric["age"]
-    triage.apache         = mnutric["apache"]
-    triage.sofa           = mnutric["sofa"]
-    triage.comorbidity    = mnutric["comorbity"]
-    triage.days           = mnutric["daysUTI"]
-    triage.total          = mnutric["total"]
-    triage.apacheManual   = True
-    triage.sofaManual     = True
-    triage.classification = mnutric["classify"]
+    screening.mn_idade = mnutric["age"]
+    screening.mn_apache = mnutric["apache"]
+    screening.mn_sofa = mnutric["sofa"]
+    screening.mn_comor = mnutric["comorbity"]
+    screening.mn_dias = mnutric["daysUTI"]
+    screening.mn_total = mnutric["total"]
+    screening.mn_apache_manual = True
+    screening.mn_sofa_manual = True
+    screening.classificacao = mnutric["classify"]
 
     db.session.flush()
 
-    return triage
+    return screening
 
 def get_active_admissions():
     """Return all active admissions with ICU protocol flag.
@@ -69,41 +72,8 @@ def get_active_admissions():
     result = db.session.execute(query, {"icu_type": SegmentTypeEnum.ICU.value})
     return result.fetchall()
 
-def get_active_admissions():
-    """Return all active admissions with ICU protocol flag.
-
-    Active means dtalta IS NULL. Uses LEFT JOINs on segmentosetor and segmento
-    so patients whose sector has no segment mapping are still included
-    (is_icu defaults to False via COALESCE).
-
-    Returns:
-        List of rows with fields:
-            nratendimento, fksetor, dtnascimento, dtinternacao,
-            peso, altura, idcid, tp_segmento (int|None), is_icu (bool)
-    """
-    query = text(
-        """
-        SELECT
-            p.nratendimento,
-            p.fksetor,
-            p.dtnascimento,
-            p.dtinternacao,
-            p.peso,
-            p.altura,
-            p.idcid,
-            seg.tp_segmento,
-            COALESCE(seg.tp_segmento = :icu_type, false) AS is_icu
-        FROM pessoa p
-        LEFT JOIN segmentosetor ss  ON ss.fksetor     = p.fksetor
-        LEFT JOIN segmento seg      ON seg.idsegmento  = ss.fksegmento
-        WHERE p.dtalta IS NULL
-        """
-    )
-    result = db.session.execute(query, {"icu_type": SegmentTypeEnum.ICU.value})
-    return result.fetchall()
-
-# Verify if we have the triagem table and their columns
-def _is_nutritional_triage_table_ready() -> bool:
+# Verify if we have the screening table and their columns.
+def _is_nutritional_screening_table_ready() -> bool:
     connection = db.session.connection()
     schema = connection.get_execution_options().get("schema_translate_map", {}).get(None) or "demo"
 
