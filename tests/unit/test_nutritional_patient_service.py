@@ -3,6 +3,7 @@
 from datetime import datetime as real_datetime
 from datetime import timedelta
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 
@@ -234,3 +235,103 @@ def test_calculate_mnutric(age, id_icd, admission_days_ago, apache, sofa, expect
     result = service.calculate_mnutric(patient, apache=apache, sofa=sofa)
 
     assert result == expected
+
+
+def test_recalculate_mnutric_restores_dimension_scores_to_canonical_raw_inputs():
+    source_patient = SimpleNamespace(
+        nratendimento=123,
+        dtnascimento=real_datetime(1950, 4, 1),
+        dtinternacao=FIXED_NOW - timedelta(days=2),
+    )
+    normalized_patient = SimpleNamespace(
+        admissionNumber=123,
+        birthdate=real_datetime(1950, 4, 1),
+        id_icd="A00",
+        admissionDate=FIXED_NOW - timedelta(days=2),
+    )
+    screening = SimpleNamespace(mn_apache=2, mn_sofa=1)
+
+    with patch(
+        "services.nutritional.nutritional_patient_service.nutritional_repository.get_saved_mnutric",
+        return_value=screening,
+    ), patch(
+        "services.patient_service.get_patient_mnutric",
+        return_value=normalized_patient,
+    ), patch(
+        "services.nutritional.nutritional_patient_service.calculate_mnutric",
+        return_value={"total": 6},
+    ) as mock_calculate:
+        result = service.recalculate_mnutric(source_patient)
+
+    assert result == {"total": 6}
+    mock_calculate.assert_called_once_with(
+        patient=normalized_patient,
+        apache=20,
+        sofa=6,
+    )
+
+
+@pytest.mark.parametrize(
+    "patient",
+    [
+        pytest.param(
+            SimpleNamespace(
+                nratendimento=None,
+                dtnascimento=real_datetime(1950, 4, 1),
+                dtinternacao=FIXED_NOW - timedelta(days=2),
+            ),
+            id="missing-admission-number",
+        ),
+        pytest.param(
+            SimpleNamespace(
+                nratendimento=123,
+                dtnascimento=None,
+                dtinternacao=FIXED_NOW - timedelta(days=2),
+            ),
+            id="missing-birthdate",
+        ),
+        pytest.param(
+            SimpleNamespace(
+                nratendimento=123,
+                dtnascimento=real_datetime(1950, 4, 1),
+                dtinternacao=None,
+            ),
+            id="missing-admission-date",
+        ),
+    ],
+)
+def test_recalculate_mnutric_returns_none_when_required_fields_are_missing(patient):
+    assert service.recalculate_mnutric(patient) is None
+
+
+def test_recalculate_mnutric_calls_calculate_with_none_inputs_when_screening_is_missing():
+    source_patient = SimpleNamespace(
+        nratendimento=123,
+        dtnascimento=real_datetime(1950, 4, 1),
+        dtinternacao=FIXED_NOW - timedelta(days=2),
+    )
+    normalized_patient = SimpleNamespace(
+        admissionNumber=123,
+        birthdate=real_datetime(1950, 4, 1),
+        id_icd="",
+        admissionDate=FIXED_NOW - timedelta(days=2),
+    )
+
+    with patch(
+        "services.nutritional.nutritional_patient_service.nutritional_repository.get_saved_mnutric",
+        return_value=None,
+    ), patch(
+        "services.patient_service.get_patient_mnutric",
+        return_value=normalized_patient,
+    ), patch(
+        "services.nutritional.nutritional_patient_service.calculate_mnutric",
+        return_value={"dados_incompletos": True},
+    ) as mock_calculate:
+        result = service.recalculate_mnutric(source_patient)
+
+    assert result == {"dados_incompletos": True}
+    mock_calculate.assert_called_once_with(
+        patient=normalized_patient,
+        apache=None,
+        sofa=None,
+    )

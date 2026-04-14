@@ -40,7 +40,20 @@ def recalculate_nutritional_scores():
     for patient in patients:
         try:
             if patient.is_icu:
-                nutritional_patient_service.recalculate_mnutric(patient)
+                result = nutritional_patient_service.recalculate_mnutric(patient)
+
+                if result is None:
+                    logger.error(
+                        "Falha ao recalcular mNUTRIC para nratendimento=%s: retorno None",
+                        patient.nratendimento,
+                    )
+                    errors += 1
+                    continue
+
+                logger.info(
+                    "mNUTRIC recalculado com sucesso para nratendimento=%s",
+                    patient.nratendimento,
+                )
             else:
                 # TODO (US-BE-04): nutritional_score_service.recalculate_nrs(patient)
                 pass

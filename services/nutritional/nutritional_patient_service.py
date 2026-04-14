@@ -120,7 +120,35 @@ def recalculate_mnutric(patient):
         return None
 
     screening = nutritional_repository.get_saved_mnutric(admission_number)
-    apache = getattr(screening, "mn_apache", None)
-    sofa = getattr(screening, "mn_sofa", None)
+    apache = _restore_apache_ii_from_dimension(getattr(screening, "mn_apache", None))
+    sofa = _restore_sofa_from_dimension(getattr(screening, "mn_sofa", None))
 
     return calculate_mnutric(patient=patient, apache=apache, sofa=sofa)
+
+def _restore_apache_ii_from_dimension(score):
+    if score is None:
+        return None
+
+    if score == 0:
+        return 0
+    if score == 1:
+        return 15
+    if score == 2:
+        return 20
+    if score == 3:
+        return 28
+
+    return score
+
+def _restore_sofa_from_dimension(score):
+    if score is None:
+        return None
+
+    if score == 0:
+        return 0
+    if score == 1:
+        return 6
+    if score == 2:
+        return 10
+
+    return score

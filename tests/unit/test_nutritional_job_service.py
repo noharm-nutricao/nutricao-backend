@@ -32,19 +32,16 @@ class TestRecalculateNutritionalScores:
         with patch(
             "services.nutritional.nutritional_job_service.nutritional_repository.get_active_admissions",
             return_value=patients,
+        ), patch(
+            "services.nutritional.nutritional_job_service.nutritional_patient_service.recalculate_mnutric",
+            return_value={"total": 5},
+        ), patch(
+            "services.nutritional.nutritional_job_service.db.session.commit",
         ):
             job_service.recalculate_nutritional_scores()
 
     def test_tolerates_single_patient_failure(self):
         """An exception on one patient must not interrupt the rest of the batch."""
-        call_log = []
-
-        def fake_icu_recalc(patient):
-            raise ValueError("Simulated error")
-
-        def fake_nrs_recalc(patient):
-            call_log.append(patient.nratendimento)
-
         patients = [
             _make_patient(1, False),
             _make_patient(2, True),   # this one will fail
@@ -54,12 +51,54 @@ class TestRecalculateNutritionalScores:
         with patch(
             "services.nutritional.nutritional_job_service.nutritional_repository.get_active_admissions",
             return_value=patients,
+        ), patch(
+            "services.nutritional.nutritional_job_service.nutritional_patient_service.recalculate_mnutric",
+            side_effect=ValueError("Simulated error"),
+        ), patch(
+            "services.nutritional.nutritional_job_service.db.session.commit",
+        ), patch(
+            "services.nutritional.nutritional_job_service.db.session.rollback",
         ), patch.object(job_service.logger, "error") as mock_error:
             job_service.recalculate_nutritional_scores()
 
-        # Job must complete for all 3 patients — error logged only for patient 2
-        assert mock_error.call_count == 0  # TODOs are pass — no real error yet
-        # Once US-BE-04/05 are implemented, inject failing mocks here
+        assert mock_error.call_count == 1
+
+    def test_logs_success_for_icu_patient_with_valid_recalculation(self):
+        patients = [_make_patient(10, True)]
+
+        with patch(
+            "services.nutritional.nutritional_job_service.nutritional_repository.get_active_admissions",
+            return_value=patients,
+        ), patch(
+            "services.nutritional.nutritional_job_service.nutritional_patient_service.recalculate_mnutric",
+            return_value={"total": 5},
+        ), patch(
+            "services.nutritional.nutritional_job_service.db.session.commit",
+        ) as mock_commit, patch.object(job_service.logger, "info") as mock_info:
+            job_service.recalculate_nutritional_scores()
+
+        mock_commit.assert_called_once()
+        assert any(
+            "mNUTRIC recalculado com sucesso" in str(call)
+            for call in mock_info.call_args_list
+        )
+
+    def test_logs_error_for_icu_patient_when_recalculation_returns_none(self):
+        patients = [_make_patient(10, True)]
+
+        with patch(
+            "services.nutritional.nutritional_job_service.nutritional_repository.get_active_admissions",
+            return_value=patients,
+        ), patch(
+            "services.nutritional.nutritional_job_service.nutritional_patient_service.recalculate_mnutric",
+            return_value=None,
+        ), patch(
+            "services.nutritional.nutritional_job_service.db.session.commit",
+        ) as mock_commit, patch.object(job_service.logger, "error") as mock_error:
+            job_service.recalculate_nutritional_scores()
+
+        mock_commit.assert_not_called()
+        assert any("retorno None" in str(call) for call in mock_error.call_args_list)
 
     def test_icu_patient_takes_mnutric_branch(self):
         """Patients with is_icu=True must enter the MNUTRIC branch (not NRS)."""
@@ -91,6 +130,11 @@ class TestRecalculateNutritionalScores:
         with patch(
             "services.nutritional.nutritional_job_service.nutritional_repository.get_active_admissions",
             return_value=patients,
+        ), patch(
+            "services.nutritional.nutritional_job_service.nutritional_patient_service.recalculate_mnutric",
+            return_value={"total": 5},
+        ), patch(
+            "services.nutritional.nutritional_job_service.db.session.commit",
         ), patch.object(job_service.logger, "info") as mock_info:
             job_service.recalculate_nutritional_scores()
 
