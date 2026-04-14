@@ -4,8 +4,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from repository.nutritional_temp import nutritional_nrs_repository as repo
-from services.temp_nutritional.nutritional_dtos import NrsScoreDTO
+from repository.nutritional import nutritional_nrs_repository as repo
+from services.nutritional.nutritional_dtos import NrsScoreDTO
 
 
 @pytest.fixture(autouse=True)
@@ -69,7 +69,7 @@ def test_get_nrs_assessment_internal_builds_query_chain() -> None:
 
     result = repo._get_nrs_assessment(session, 88)
 
-    session.query.assert_called_once_with(repo.NutricionalNrs)
+    session.query.assert_called_once_with(repo.NutritionalNrs)
     query.filter.assert_called_once()
     filtered.order_by.assert_called_once()
     ordered.first.assert_called_once_with()
@@ -98,7 +98,7 @@ def test_get_or_create_triagem_internal_creates_with_defaults() -> None:
 
     result = repo._get_or_create_triagem(session, 42)
 
-    assert isinstance(result, repo.NutricionalScreening)
+    assert isinstance(result, repo.NutritionalScreening)
     assert result.nratendimento == 42
     assert result.protocolo == "NRS2002"
     assert result.nrs_completo is False

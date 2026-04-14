@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from services.temp_nutritional import nutritional_nrs_service as svc
+from services.nutritional import nutritional_nrs_service as svc
 
 
 @pytest.fixture
