@@ -40,7 +40,7 @@ class BaseConfig:
     MAIL_PASSWORD = Config.MAIL_PASSWORD
 
     # CORS
-    CORS_ORIGINS = [Config.MAIL_HOST]
+    CORS_ORIGINS =  [Config.MAIL_HOST, "http://localhost:3000"]
     CORS_SUPPORTS_CREDENTIALS = True
 
 
