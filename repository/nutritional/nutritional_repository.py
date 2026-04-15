@@ -10,6 +10,9 @@ from sqlalchemy import text
 from models.enums import SegmentTypeEnum
 from models.main import db
 
+def get_patients_repository():
+    #toDO
+    pass
 
 def get_active_admissions():
     """Return all active admissions with ICU protocol flag.

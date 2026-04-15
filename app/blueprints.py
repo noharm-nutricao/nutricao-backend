@@ -62,6 +62,8 @@ from routes.support import app_support
 from routes.tag import app_tag
 from routes.user import app_usr
 from routes.user_admin import app_user_admin
+from routes.nutritional.nutritional_patients import app_nutritional
+from routes.nutritional.nutritional_job import app_nutritional_job
 
 
 def register_blueprints(app):
@@ -135,5 +137,6 @@ def register_blueprints(app):
     from routes.nutritional.nutritional_job import app_nutritional_job
     from routes.nutritional.nrs_nut import app_nrs_nut
 
+    app.register_blueprint(app_nutritional)
     app.register_blueprint(app_nutritional_job)
     app.register_blueprint(app_nrs_nut)

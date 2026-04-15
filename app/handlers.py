@@ -64,11 +64,11 @@ def register_handlers(app):
 
     from werkzeug.exceptions import HTTPException
 
-    @app.errorhandler(Exception)
-    def handle_error(e):
-
-        if isinstance(e, HTTPException):
-            return e
-
-        current_app.logger.exception(e)
-        return {"error": "internal server error"}, 500
+    # @app.errorhandler(Exception)
+    # def handle_error(e):
+    #
+    #     if isinstance(e, HTTPException):
+    #         return e
+    #
+    #     current_app.logger.exception(e)
+    #     return {"error": "internal server error"}, 500
