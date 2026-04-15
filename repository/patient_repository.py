@@ -94,7 +94,7 @@ def get_patient_observation_history(admission_number: int):
 def get_patient_mnutric(admissionNumber: int):
     """Get patient mnutric data"""  
     query = (
-        select(Patient.admissionNumber, Patient.birthdate, Patient.id_icd, Patient.admissionDate)
+        select(Patient.admissionNumber, Patient.birthdate, Patient.id_icd, Patient.admissionDate, Patient.lastTransferDate)
         .select_from(Patient)
         .where(Patient.admissionNumber == admissionNumber)
     )

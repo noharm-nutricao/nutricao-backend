@@ -32,7 +32,7 @@ class NutritionalScreening(db.Model):
     nrs_doenca = db.Column("nrs_doenca", db.Integer, nullable=True)
     nrs_idade = db.Column("nrs_idade", db.Integer, nullable=True)
     nrs_total = db.Column("nrs_total", db.Integer, nullable=True)
-    nrs_completo = db.Column("nrs_completo", db.Boolean, nullable=False)
+    nrs_completo = db.Column("nrs_completo", db.Boolean, nullable=False, default=False)
     nrs_ref_at = db.Column("nrs_ref_at", db.DateTime, nullable=True)
 
     mn_idade = db.Column("mn_idade", db.Integer, nullable=True)

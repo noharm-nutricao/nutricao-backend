@@ -97,6 +97,7 @@ class Patient(db.Model):
     tags = db.Column("marcadores", postgresql.ARRAY(db.String(100)), nullable=True)
     responsiblePhysician = db.Column("medico_responsavel", db.String, nullable=True)
     id_icd = db.Column("idcid", db.String, nullable=True)
+    lastTransferDate = db.Column("dt_ultima_transferencia", db.DateTime, nullable=True)
     dischargeDateForecast = db.Column("dt_alta_prevista", db.DateTime, nullable=True)
     city = db.Column("cidade", db.String, nullable=True)
 

@@ -277,7 +277,8 @@ def get_patient_mnutric(admission_number: int):
     patient.birthdate       = event.birthdate
     patient.id_icd          = event.id_icd or ''
     patient.admissionDate   = event.admissionDate
-    
+    patient.utiEntryDate    = event.lastTransferDate or event.admissionDate
+
     return patient
 
 def _audit(patient: Patient, audit_type: PatientAuditTypeEnum, user: User):

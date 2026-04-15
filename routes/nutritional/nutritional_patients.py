@@ -1,14 +1,9 @@
-from flask import Blueprint, request
-
-# routes/nutritional/nutritional_patients.py
 import logging
 
-from flask import ( Blueprint, request ) 
+from flask import Blueprint, request
 
 from decorators.api_endpoint_decorator import api_endpoint
-from decorators.has_permission_decorator import has_permission
 from exception.validation_error import ValidationError
-from security.permission import Permission
 
 from services.nutritional import nutritional_patient_service
 from services import patient_service
@@ -43,11 +38,9 @@ def get_patients():
 
 @app_nutritional.route("/nutritional/patients/<int:nratendimento>/mnutric-manual", methods=["PUT"])
 @api_endpoint()
-@has_permission(Permission.READ_PRESCRIPTION)
 def calculate_mnutric(nratendimento):
     data = request.get_json(silent=True) or {}
 
-    # validation guards
     apache = _validate_required_manual_score(data, "apache_ii", APACHE_II_MIN)
     sofa   = _validate_required_manual_score(data, "sofa", SOFA_MIN)
 

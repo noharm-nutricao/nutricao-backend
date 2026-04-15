@@ -1,5 +1,6 @@
 from decorators.has_permission_decorator import has_permission
 from datetime import datetime
+from types import SimpleNamespace
 
 from repository.nutritional import nutritional_repository
 from security.permission import Permission
@@ -28,7 +29,7 @@ def save_manual_mnutric(admission_number: int, mnutric: dict):
 
 def calculate_mnutric(patient, apache, sofa) -> dict:
     today             = datetime.now()
-    uti_days          = (today.date() - patient.admissionDate.date()).days
+    uti_days          = (today.date() - patient.utiEntryDate.date()).days
     dados_incompletos = (apache is None) or (sofa is None)
 
     mnutric_age       = _mnutric_age(patient.birthdate)
@@ -50,7 +51,14 @@ def calculate_mnutric(patient, apache, sofa) -> dict:
     }
 
     if getattr(patient, "admissionNumber", None) is not None:
-        save_manual_mnutric(admission_number=patient.admissionNumber, mnutric=result)
+        try:
+            save_manual_mnutric(admission_number=patient.admissionNumber, mnutric=result)
+        except Exception as e:
+            logging.error(
+                "Falha ao persistir mNUTRIC para nratendimento=%s: %s",
+                patient.admissionNumber,
+                e,
+            )
 
     return result
 
@@ -84,7 +92,6 @@ def _mnutric_sofa(sofa) -> int:
         mnutric_sofa = 2
     return mnutric_sofa
 
-#TODO: verify if we can have in a single string more than one cid from patient
 def _mnutric_comorbity(comorbity) -> int:
     mnutric_comorbity = 0
     if comorbity:
@@ -110,20 +117,40 @@ def _mnutric_clasify(mnutric: int) -> str:
         return "unknown"
 
 def recalculate_mnutric(patient):
-    from services import patient_service
-
     admission_number = getattr(patient, "nratendimento", None)
     birthdate = getattr(patient, "dtnascimento", None)
     admission_date = getattr(patient, "dtinternacao", None)
 
     if (admission_number is None) or (birthdate is None) or (admission_date is None):
+        logging.warning(
+            "Recalculo mNUTRIC ignorado para nratendimento=%s: campos obrigatorios ausentes",
+            admission_number,
+        )
         return None
+
+    normalized = SimpleNamespace(
+        admissionNumber=admission_number,
+        birthdate=birthdate,
+        admissionDate=admission_date,
+        utiEntryDate=getattr(patient, "dt_ultima_transferencia", None) or admission_date,
+        id_icd=getattr(patient, "idcid", None) or '',
+    )
 
     screening = nutritional_repository.get_saved_mnutric(admission_number)
     apache = _restore_apache_ii_from_dimension(getattr(screening, "mn_apache", None))
     sofa = _restore_sofa_from_dimension(getattr(screening, "mn_sofa", None))
 
-    return calculate_mnutric(patient=patient, apache=apache, sofa=sofa)
+    result = calculate_mnutric(patient=normalized, apache=apache, sofa=sofa)
+
+    logging.info(
+        "mNUTRIC recalculado para nratendimento=%s: total=%s, classify=%s, dados_incompletos=%s",
+        admission_number,
+        result["total"],
+        result["classify"],
+        result["dados_incompletos"],
+    )
+
+    return result
 
 def _restore_apache_ii_from_dimension(score):
     if score is None:
