@@ -248,14 +248,15 @@ def test_internal_component_b_returns_zero_when_chapter_not_mapped() -> None:
     assert result == 0
 
 
-def test_internal_component_b_len_lt_3_current_behavior_raises_unboundlocalerror(
+def test_internal_component_b_len_lt_3_uses_chapter_score(
     cid_mappings: svc.CidMappings,
 ) -> None:
     is_uti_fn = MagicMock(return_value=False)
     get_mappings_fn = MagicMock(return_value=cid_mappings)
 
-    with pytest.raises(UnboundLocalError):
-        svc._score_nrs_component_b(1, "A", is_uti_fn, get_mappings_fn)
+    result = svc._score_nrs_component_b(1, "A", is_uti_fn, get_mappings_fn)
+
+    assert result == 1
 
 
 # 8) calculate_age

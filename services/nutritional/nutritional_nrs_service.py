@@ -107,8 +107,8 @@ def _score_nrs_component_b(
     if not cid:
         return 0
 
+    mappings: CidMappings = get_cid_mappings_cached_fn()
     if len(cid) >= 3:
-        mappings: CidMappings = get_cid_mappings_cached_fn()
         prefix3: str = cid[:3]
         if prefix3 in mappings.overrides:
             return mappings.overrides[prefix3]
