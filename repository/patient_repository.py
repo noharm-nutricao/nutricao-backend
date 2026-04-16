@@ -27,7 +27,6 @@ def get_latest_admissions_by_id_patient(id_patient: int, limit: int = 2):
 
     return admission_list
 
-
 def get_next_admissions(admission_number: int, limit: int = 2):
     """
     Search for next admission numbers
@@ -91,3 +90,13 @@ def get_patient_observation_history(admission_number: int):
     )
 
     return db.session.execute(query).all()
+
+def get_patient_mnutric(admissionNumber: int):
+    """Get patient mnutric data"""  
+    query = (
+        select(Patient.admissionNumber, Patient.birthdate, Patient.id_icd, Patient.admissionDate, Patient.lastTransferDate)
+        .select_from(Patient)
+        .where(Patient.admissionNumber == admissionNumber)
+    )
+
+    return db.session.execute(query).first()

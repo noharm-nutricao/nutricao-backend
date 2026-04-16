@@ -115,4 +115,5 @@ results.csv.gz
 results.csv
 config.py
 
+.idea/workspace.xml
 .idea
