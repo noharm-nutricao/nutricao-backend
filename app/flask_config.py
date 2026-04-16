@@ -48,6 +48,7 @@ class DevelopmentConfig(BaseConfig):
     """Development environment configuration."""
 
     DEBUG = True
+    CORS_ORIGINS = [Config.MAIL_HOST, "http://localhost:3000"]
 
 
 class ProductionConfig(BaseConfig):
@@ -61,6 +62,7 @@ class TestConfig(BaseConfig):
 
     TESTING = True
     DEBUG = True
+    CORS_ORIGINS = [Config.MAIL_HOST, "http://localhost:3000"]
     SQLALCHEMY_DATABASE_URI = "postgresql://postgres@localhost/noharm"
     SQLALCHEMY_BINDS = {"report": "postgresql://postgres@localhost/noharm"}
 

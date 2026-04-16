@@ -32,6 +32,7 @@ from routes.memory import app_mem
 from routes.names import app_names
 from routes.navigation import app_navigation
 from routes.notes import app_note
+from routes.nutritional.nutritional_active_patients import app_nutritional_patients
 from routes.outlier import app_out
 from routes.outlier_generate import app_gen
 from routes.patient import app_pat
@@ -98,6 +99,7 @@ def register_blueprints(app):
     app.register_blueprint(app_navigation)
     app.register_blueprint(app_user_admin)
     app.register_blueprint(app_pres_crud)
+    app.register_blueprint(app_nutritional_patients)
 
     # Admin blueprints
     app.register_blueprint(app_admin_freq)

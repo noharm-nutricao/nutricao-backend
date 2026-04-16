@@ -11,7 +11,10 @@ services:
     environment:
       DEBUG_METRICS: "1"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
 
   db:
     image: postgres:16-alpine

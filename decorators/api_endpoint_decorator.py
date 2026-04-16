@@ -18,7 +18,7 @@ from models.main import User, db, dbSession
 from utils import logger, status
 
 
-def api_endpoint(download_headers=None, is_admin=False):
+def api_endpoint(download_headers=None, is_admin=False, include_total=False):
     def wrapper(f):
         @wraps(f)
         def decorator_f(*args, **kwargs):
@@ -54,7 +54,10 @@ def api_endpoint(download_headers=None, is_admin=False):
                         response.headers[header_name] = header_value
                     return response
 
-                return {"status": "success", "data": result}, status.HTTP_200_OK
+                response = {"status": "success", "data": result}
+                if include_total and isinstance(result, list):
+                    response["total"] = len(result)
+                return response, status.HTTP_200_OK
 
             except (JWTExtendedException, PyJWTError):
                 db.session.rollback()
