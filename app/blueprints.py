@@ -134,5 +134,9 @@ def register_blueprints(app):
     app.register_blueprint(app_regulation)
 
     # Nutritional blueprints
+    from routes.nutritional.nutritional_job import app_nutritional_job
+    from routes.nutritional.nrs_nut import app_nrs_nut
+
     app.register_blueprint(app_nutritional)
     app.register_blueprint(app_nutritional_job)
+    app.register_blueprint(app_nrs_nut)
