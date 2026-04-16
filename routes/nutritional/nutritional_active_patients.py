@@ -4,7 +4,7 @@ from flask import Blueprint, request
 
 from decorators.api_endpoint_decorator import api_endpoint
 from models.requests.nutritional_patients_request import NutritionalPatientsRequest
-from services import nutritional_patients_service
+from services.nutritional import nutritional_active_patients_service
 
 app_nutritional_patients = Blueprint("app_nutritional_patients", __name__)
 

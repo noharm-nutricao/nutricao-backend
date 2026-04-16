@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from services.nutritional_patients_service import (
+from services.nutritional.nutritional_active_patients_service import (
     _calculate_age,
     _calculate_days,
     _calculate_imc,

@@ -1,11 +1,14 @@
 """Service layer for GET /nutritional/patients endpoint."""
 
 from datetime import datetime, timezone
+import logging
 
 from decorators.has_permission_decorator import Permission, has_permission
 from models.enums import SegmentTypeEnum
 from models.requests.nutritional_patients_request import NutritionalPatientsRequest
 from repository import nutritional_patients_repository
+
+log = logging.getLogger(__name__)
 
 
 @has_permission(Permission.READ_PRESCRIPTION)
@@ -27,21 +30,36 @@ def get_patients(request_data: NutritionalPatientsRequest):
         ala=request_data.ala,
     )
 
+    log.info("Repository returned %s patients", len(rows))
+
     patients = []
     now = datetime.now(timezone.utc)
 
     for idx, row in enumerate(rows, start=1):
+        log.info("Processing patient idx=%s | id=%s", idx, row.id)
+
         # Derive protocolo from segment type
         protocolo = "MNUTRIC" if row.tp_segmento == SegmentTypeEnum.ICU.value else "NRS2002"
 
         # Calculate idade (age in complete years)
         idade = _calculate_age(row.dtnascimento, now) if row.dtnascimento else None
+        if idade is None:
+            log.info("Missing birthdate for patient id=%s", row.id)
 
         # Calculate dias (days of admission)
         dias = _calculate_days(row.dtinternacao, now) if row.dtinternacao else None
+        if dias is None:
+            log.info("Missing admission date for patient id=%s", row.id)
 
         # Calculate IMC (BMI): peso in kg, altura in cm
         imc = _calculate_imc(row.peso, row.altura)
+        if imc is None:
+            log.info(
+                "IMC not calculated for patient id=%s | peso=%s | altura=%s",
+                row.id,
+                row.peso,
+                row.altura,
+            )
 
         # haval: round to 1 decimal place if not None
         haval = round(row.haval, 1) if row.haval is not None else None
@@ -87,6 +105,8 @@ def get_patients(request_data: NutritionalPatientsRequest):
             }
         )
 
+    log.info("Finished get_patients | total_processed=%s", len(patients))
+
     return patients
 
 
@@ -126,4 +146,3 @@ def _calculate_imc(peso, altura):
         altura_m = altura / 100.0
         return round(peso / (altura_m**2), 1)
     return None
-
