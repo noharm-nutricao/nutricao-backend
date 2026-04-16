@@ -3,11 +3,10 @@ import logging
 from flask import Blueprint, request
 
 from decorators.api_endpoint_decorator import api_endpoint
-from exception.validation_error import ValidationError
 
 from services.nutritional import nutritional_patient_service
 from services import patient_service
-from utils import status
+from routes.nutritional.validators.mnutric_validator import MnutricValidator
 
 app_nutritional = Blueprint("app_nutritional", __name__)
 
@@ -23,11 +22,7 @@ def get_patients():
         data = nutritional_patient_service.get_patients()
 
         if data is None:
-            raise ValidationError(
-                "Nenhum paciente encontrado.",
-                "errors.notFound",
-                status.HTTP_404_NOT_FOUND
-            )
+            MnutricValidator.raise_invalid_manual_scores()
 
         logging.info(f"Busca de pacientes realizada com sucesso.")
         return data
@@ -41,8 +36,8 @@ def get_patients():
 def calculate_mnutric(nratendimento):
     data = request.get_json(silent=True) or {}
 
-    apache = _validate_required_manual_score(data, "apache_ii", APACHE_II_MIN)
-    sofa   = _validate_required_manual_score(data, "sofa", SOFA_MIN)
+    apache = MnutricValidator.validate_required_manual_score(data, "apache_ii", APACHE_II_MIN)
+    sofa   = MnutricValidator.validate_required_manual_score(data, "sofa", SOFA_MIN)
 
     patient = patient_service.get_patient_mnutric(nratendimento)
     mnutric = nutritional_patient_service.calculate_mnutric(patient, apache, sofa)
@@ -60,29 +55,3 @@ def calculate_mnutric(nratendimento):
         "classificacao": mnutric["classify"],
     }
 
-def _raise_invalid_manual_scores():
-    raise ValidationError(
-        "Valores inválidos para APACHE II ou SOFA",
-        "errors.invalidRequest",
-        status.HTTP_400_BAD_REQUEST,
-    )
-
-def _validate_required_manual_score(data, field_name, minimum):
-    if not isinstance(data, dict):
-        _raise_invalid_manual_scores()
-
-    if field_name not in data:
-        _raise_invalid_manual_scores()
-
-    value = data[field_name]
-
-    if value is None:
-        _raise_invalid_manual_scores()
-
-    if isinstance(value, bool) or not isinstance(value, int):
-        _raise_invalid_manual_scores()
-
-    if value < minimum:
-        _raise_invalid_manual_scores()
-
-    return value
