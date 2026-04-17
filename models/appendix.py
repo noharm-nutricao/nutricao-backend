@@ -5,6 +5,7 @@ from .main import db
 
 class Department(db.Model):
     __tablename__ = "setor"
+    __table_args__ = {"schema": "demo"}
 
     id = db.Column("fksetor", db.BigInteger, primary_key=True)
     idHospital = db.Column("fkhospital", db.BigInteger, primary_key=True)
@@ -13,6 +14,7 @@ class Department(db.Model):
 
 class SegmentDepartment(db.Model):
     __tablename__ = "segmentosetor"
+    __table_args__ = {"schema": "demo"}
 
     id = db.Column("idsegmento", db.BigInteger, primary_key=True)
     idHospital = db.Column("fkhospital", db.BigInteger, primary_key=True)

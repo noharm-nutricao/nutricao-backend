@@ -1,10 +1,12 @@
+from datetime import datetime
+
 from sqlalchemy import text
 
 from decorators.has_permission_decorator import has_permission
 from exception.validation_error import ValidationError
 from models.enums import SegmentTypeEnum
 from models.main import User, db
-from models.nutritional import NutritionalTriagem
+from models.nutritional import NutritionalTriagem, NutritionalScreening
 from models.prescription import Patient
 from security.permission import Permission
 from utils import status
@@ -60,8 +62,19 @@ def _calculate_age(birthdate):
 def _calculate_days(admission_date):
     if admission_date is None:
         return 0
+
     today = today_sp()
-    ad = admission_date if hasattr(admission_date, "year") else admission_date.date()
+
+    # garante que é date
+    if isinstance(admission_date, datetime):
+        ad = admission_date.date()
+    else:
+        ad = admission_date
+
+    # opcional (segurança extra)
+    if isinstance(today, datetime):
+        today = today.date()
+
     return (today - ad).days
 
 
@@ -90,19 +103,20 @@ def update_nrs_nut(nratendimento, request_data, user_context: User):
         )
 
     triagem = (
-        db.session.query(NutritionalTriagem)
-        .filter(NutritionalTriagem.admissionNumber == nratendimento)
-        .order_by(NutritionalTriagem.created_at.desc())
+        db.session.query(NutritionalScreening)
+        .filter(NutritionalScreening.nratendimento == nratendimento)
+        .order_by(NutritionalScreening.created_at.desc())
         .first()
     )
 
     now = now_sp()
 
     if triagem is None:
-        triagem = NutritionalTriagem()
-        triagem.admissionNumber = nratendimento
+        triagem = NutritionalScreening()
+        triagem.nratendimento = nratendimento
         triagem.created_at = now
         triagem.created_by = user_context.id
+        triagem.protocolo = "MNUTRIC"
         db.session.add(triagem)
 
     triagem.mn_apache = request_data.apache_ii
