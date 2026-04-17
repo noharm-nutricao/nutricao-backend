@@ -51,18 +51,20 @@ def get_saved_mnutric(admission_number: int):
         .first()
     )
 
-def get_active_admissions():
-    """Return all active admissions with ICU protocol flag.
+def get_active_admissions(schema: str = "demo"):
+    """Return all active admissions for the given tenant schema.
 
     Active means dtalta IS NULL. Uses LEFT JOINs on segmentosetor and segmento
-    so patients whose sector has no segment mapping are still included
-    (is_icu defaults to False via COALESCE).
+    so patients whose sector has no segment mapping are still included.
+    Sets search_path for the duration of this transaction so unqualified table
+    names resolve to the correct tenant schema.
 
     Returns:
         List of rows with fields:
             nratendimento, fksetor, dtnascimento, dtinternacao,
-            peso, altura, idcid, tp_segmento (int|None), is_icu (bool)
+            peso, altura, idcid, dt_ultima_transferencia, tp_segmento (int|None)
     """
+    db.session.execute(text(f'SET LOCAL search_path TO "{schema}"'))
     query = text(
         """
         SELECT
@@ -74,15 +76,14 @@ def get_active_admissions():
             p.altura,
             p.idcid,
             p.dt_ultima_transferencia,
-            seg.tp_segmento,
-            COALESCE(seg.tp_segmento = :icu_type, false) AS is_icu
+            seg.tp_segmento
         FROM pessoa p
         LEFT JOIN segmentosetor ss  ON ss.fksetor     = p.fksetor
         LEFT JOIN segmento seg      ON seg.idsegmento  = ss.idsegmento
         WHERE p.dtalta IS NULL
         """
     )
-    result = db.session.execute(query, {"icu_type": SegmentTypeEnum.ICU.value})
+    result = db.session.execute(query)
     return result.fetchall()
 
 # Verify if we have the screening table and their columns.

@@ -16,63 +16,80 @@ from concurrent.futures import TimeoutError as FuturesTimeoutError
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
+from types import SimpleNamespace
+
 from config import Config
 from models.main import db
 from repository.nutritional import nutritional_repository
 from services.nutritional import nutritional_patient_service
+from services.nutritional import nutritional_nrs_service
+from services.nutritional.nutritional_nrs_service import is_uti
 
 logger = logging.getLogger("noharm.nutritional")
 
 scheduler = BackgroundScheduler()
 
 
-def recalculate_nutritional_scores():
+def recalculate_nutritional_scores(app):
     """Recalculate Campo 1 scores for all active admissions.
 
     Processes each active admission independently so that an error in one
     patient does not interrupt the rest of the batch. Logs total processed
     count and error count at the end of each run.
+
+    Args:
+        app: Flask application instance — needed to push an app context
+             inside the executor thread, which does not inherit the caller's context.
     """
-    logger.info("Iniciando recalculo de scores nutricionais...")
-    patients = nutritional_repository.get_active_admissions()
-    processed, errors = 0, 0
+    with app.app_context():
+        logger.info("Iniciando recalculo de scores nutricionais (schema=%s)...", Config.SCHEDULER_SCHEMA)
+        patients = nutritional_repository.get_active_admissions(schema=Config.SCHEDULER_SCHEMA)
+        processed, errors = 0, 0
 
-    for patient in patients:
-        try:
-            if patient.is_icu:
-                result = nutritional_patient_service.recalculate_mnutric(patient)
+        for patient in patients:
+            try:
+                if is_uti(patient.nratendimento):
+                    result = nutritional_patient_service.recalculate_mnutric(patient)
 
-                if result is None:
-                    logger.error(
-                        "Falha ao recalcular mNUTRIC para nratendimento=%s: retorno None",
+                    if result is None:
+                        logger.error(
+                            "Falha ao recalcular mNUTRIC para nratendimento=%s: retorno None",
+                            patient.nratendimento,
+                        )
+                        errors += 1
+                        continue
+
+                    logger.info(
+                        "mNUTRIC recalculado com sucesso para nratendimento=%s",
                         patient.nratendimento,
                     )
-                    errors += 1
-                    continue
+                else:
+                    patient_ns = SimpleNamespace(
+                        admissionNumber=patient.nratendimento,
+                        birthdate=patient.dtnascimento,
+                        id_icd=patient.idcid or "",
+                    )
+                    nutritional_nrs_service.recalculate_nrs(patient_ns)
+                    logger.info(
+                        "NRS-2002 recalculado com sucesso para nratendimento=%s",
+                        patient.nratendimento,
+                    )
 
-                logger.info(
-                    "mNUTRIC recalculado com sucesso para nratendimento=%s",
+                db.session.commit()
+                processed += 1
+            except Exception as e:
+                db.session.rollback()
+                logger.error(
+                    "Erro ao recalcular nratendimento=%s: %s",
                     patient.nratendimento,
+                    e,
+                    exc_info=True,
                 )
-            else:
-                # TODO (US-BE-04): nutritional_score_service.recalculate_nrs(patient)
-                pass
+                errors += 1
 
-            db.session.commit()
-            processed += 1
-        except Exception as e:
-            db.session.rollback()
-            logger.error(
-                "Erro ao recalcular nratendimento=%s: %s",
-                patient.nratendimento,
-                e,
-                exc_info=True,
-            )
-            errors += 1
-
-    logger.info(
-        "Recalculo concluido. Processados: %d, Erros: %d", processed, errors
-    )
+        logger.info(
+            "Recalculo concluido. Processados: %d, Erros: %d", processed, errors
+        )
 
 
 def init_scheduler(app):
@@ -101,16 +118,15 @@ def init_scheduler(app):
     timeout_seconds = Config.SCHEDULER_JOB_TIMEOUT_SECONDS
 
     def _job_with_context():
-        with app.app_context():
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(recalculate_nutritional_scores)
-                try:
-                    future.result(timeout=timeout_seconds)
-                except FuturesTimeoutError:
-                    logger.error(
-                        "[US-BE-06] Job excedeu timeout de %ds e foi interrompido.",
-                        timeout_seconds,
-                    )
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(recalculate_nutritional_scores, app)
+            try:
+                future.result(timeout=timeout_seconds)
+            except FuturesTimeoutError:
+                logger.error(
+                    "[US-BE-06] Job excedeu timeout de %ds e foi interrompido.",
+                    timeout_seconds,
+                )
 
     scheduler.add_job(
         _job_with_context,
