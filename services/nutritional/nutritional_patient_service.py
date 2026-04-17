@@ -180,16 +180,22 @@ def _restore_sofa_from_dimension(score):
 
     return score
 
-def get_patients_by_nra(nratentimento: int):
+def get_patients_by_nra(nratendimento: int):
     """
-    Busca pacientes usando o repositório com tratamento de erro.
+    Busca pacientes pelo nratendimento filtrando na service.
     """
     try:
-         data = nutritional_repository.get_patients_repository()
+        data = nutritional_repository.get_patients_repository()
+
+        # filtro
+        filtered = [
+            p for p in data if p["id"] == nratendimento
+        ]
+
+        return filtered
 
     except Exception as e:
-
         logging.error(f"Erro ao buscar pacientes no repositório: {str(e)}")
-
-
-        raise Exception("Estamos com problemas para consultar pacientes em nossa base, tente novamente mais tarde")
+        raise Exception(
+            "Estamos com problemas para consultar pacientes em nossa base, tente novamente mais tarde"
+        )
