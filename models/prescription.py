@@ -102,7 +102,7 @@ class Patient(db.Model):
     lastTransferDate = db.Column("dt_ultima_transferencia", db.DateTime, nullable=True)
     dischargeDateForecast = db.Column("dt_alta_prevista", db.DateTime, nullable=True)
     city = db.Column("cidade", db.String, nullable=True)
-    #fksetor = db.Column("fksetor", db.Integer, nullable=True)
+  #  fksetor = db.Column("fksetor", db.Integer, nullable=True)
 
 
 class PatientAudit(db.Model):

@@ -38,7 +38,7 @@ def get_patients(setor=None, ala=None):
         db.session.query(
             func.max(NutritionalScreening.created_at)
         )
-        .filter(NutritionalScreening.admissionNumber == Patient.admissionNumber)
+        .filter(NutritionalScreening.nratendimento == Patient.admissionNumber)
         .correlate(Patient)
         .scalar_subquery()
     )
@@ -50,7 +50,7 @@ def get_patients(setor=None, ala=None):
     # d7: true when at least one active D7 with dt_prevista <= NOW() + 48h
     d7_subq = (
         db.session.query(func.count())
-        .filter(NutritionalD7.admissionNumber == Patient.admissionNumber)
+        .filter(NutritionalD7.nratendimento == Patient.admissionNumber)
         .filter(NutritionalD7.concluido == False)
         .filter(
             NutritionalD7.dt_prevista
@@ -62,22 +62,24 @@ def get_patients(setor=None, ala=None):
 
     d7_expr = (d7_subq > 0).label("d7")
 
-    # conduta: last registered conduct
-    conduta_subq = (
-        db.session.query(NutritionalScreening.conduta)
-        .filter(NutritionalScreening.admissionNumber == Patient.admissionNumber)
-        .correlate(Patient)
-        .order_by(NutritionalScreening.created_at.desc())
-        .limit(1)
-        .scalar_subquery()
-    ).label("conduta")
+# !! REMOVIDO SEM SENTIDO NO DIA 16/04 !!
+
+    # # conduta: last registered conduct
+    # conduta_subq = (
+    #     db.session.query(NutritionalScreening.conduta)
+    #     .filter(NutritionalScreening.nratendimento == Patient.admissionNumber)
+    #     .correlate(Patient)
+    #     .order_by(NutritionalScreening.created_at.desc())
+    #     .limit(1)
+    #     .scalar_subquery()
+    # ).label("conduta")
 
     # sev: severity classification from latest triage
     sev_subq = (
-        db.session.query(NutritionalTriagem.classificacao)
-        .filter(NutritionalTriagem.admissionNumber == Patient.admissionNumber)
+        db.session.query(NutritionalScreening.classificacao)
+        .filter(NutritionalScreening.nratendimento == Patient.admissionNumber)
         .correlate(Patient)
-        .order_by(NutritionalTriagem.created_at.desc())
+        .order_by(NutritionalScreening.created_at.desc())
         .limit(1)
         .scalar_subquery()
     ).label("sev")
@@ -85,7 +87,7 @@ def get_patients(setor=None, ala=None):
     # GLIM diagnosis fields
     glim_diag_subq = (
         db.session.query(NutritionalGlim.diagnostico)
-        .filter(NutritionalGlim.admissionNumber == Patient.admissionNumber)
+        .filter(NutritionalGlim.nratendimento == Patient.admissionNumber)
         .correlate(Patient)
         .order_by(NutritionalGlim.created_at.desc())
         .limit(1)
@@ -94,7 +96,7 @@ def get_patients(setor=None, ala=None):
 
     glim_fen_subq = (
         db.session.query(NutritionalGlim.fenotipos)
-        .filter(NutritionalGlim.admissionNumber == Patient.admissionNumber)
+        .filter(NutritionalGlim.nratendimento == Patient.admissionNumber)
         .correlate(Patient)
         .order_by(NutritionalGlim.created_at.desc())
         .limit(1)
@@ -102,8 +104,8 @@ def get_patients(setor=None, ala=None):
     ).label("glim_fen")
 
     glim_etiol_subq = (
-        db.session.query(NutritionalGlim.etiologicos)
-        .filter(NutritionalGlim.admissionNumber == Patient.admissionNumber)
+        db.session.query(NutritionalGlim.etiologias)
+        .filter(NutritionalGlim.nratendimento == Patient.admissionNumber)
         .correlate(Patient)
         .order_by(NutritionalGlim.created_at.desc())
         .limit(1)
@@ -125,7 +127,7 @@ def get_patients(setor=None, ala=None):
             Patient.id_icd.label("idcid"),
             haval_expr,
             d7_expr,
-            conduta_subq,
+            # conduta_subq,
             sev_subq,
             glim_diag_subq,
             glim_fen_subq,

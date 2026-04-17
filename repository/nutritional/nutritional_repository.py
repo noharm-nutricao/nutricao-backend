@@ -76,7 +76,7 @@ def get_active_admissions():
             p.dt_ultima_transferencia,
             seg.tp_segmento,
             COALESCE(seg.tp_segmento = :icu_type, false) AS is_icu
-        FROM pessoa p
+        FROM demo."pessoa" p
         LEFT JOIN segmentosetor ss  ON ss.fksetor     = p.fksetor
         LEFT JOIN segmento seg      ON seg.idsegmento  = ss.idsegmento
         WHERE p.dtalta IS NULL

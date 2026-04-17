@@ -3,6 +3,7 @@ import logging
 from flask import Blueprint, request
 
 from decorators.api_endpoint_decorator import api_endpoint
+from repository.nutritional import nutritional_nrs_repository
 
 from services.nutritional import nutritional_patient_service
 from services import patient_service
@@ -13,7 +14,7 @@ app_nutritional = Blueprint("app_nutritional", __name__)
 APACHE_II_MIN = 0
 SOFA_MIN = 0
 
-@app_nutritional.route("/nutritional/patients", methods=["GET"])
+@app_nutritional.route("/nutritional/list/patients", methods=["GET"])
 @api_endpoint()
 def get_patients():
     logging.info("Buscando lista de pacientes.")
@@ -21,8 +22,8 @@ def get_patients():
 
         data = nutritional_patient_service.get_patients()
 
-        if data is None:
-            MnutricValidator.raise_invalid_manual_scores()
+        # if data is None:
+        #     MnutricValidator.raise_invalid_manual_scores()
 
         logging.info(f"Busca de pacientes realizada com sucesso.")
         return data
@@ -55,3 +56,7 @@ def calculate_mnutric(nratendimento):
         "classificacao": mnutric["classify"],
     }
 
+@app_nutritional.route("/nutritional/patients/<int:nratendimento>", methods=["GET"])
+@api_endpoint()
+def list_patients_with_campo1(nratendimento):
+    return nutritional_nrs_repository.get_or_create_triagem(nratendimento)

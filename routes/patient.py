@@ -2,6 +2,7 @@ from flask import Blueprint, request
 
 from decorators.api_endpoint_decorator import api_endpoint
 from services import exams_service, patient_service, patients_listing_service
+from tests.unit.test_nutritional_nrs_service import triagem
 
 app_pat = Blueprint("app_pat", __name__)
 
@@ -69,14 +70,3 @@ def list_patients():
         )
 
     return list
-
-
-@app_pat.route("/patients", methods=["GET"])
-@api_endpoint()
-def list_patients_with_campo1():
-    id_segment = request.args.get("idSegment", None, type=int)
-    id_department = request.args.get("idDepartment", None, type=int)
-    return patients_listing_service.get_patients_listing(
-        id_segment=id_segment,
-        id_department=id_department,
-    )
