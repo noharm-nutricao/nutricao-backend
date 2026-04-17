@@ -7,7 +7,7 @@ from models.appendix import Department, SegmentDepartment
 from models.enums import SegmentTypeEnum
 from models.main import db
 from models.nutritional import (
-    NutritionalAvaliacao,
+    NutritionalScreening,
     NutritionalD7,
     NutritionalGlim,
     NutritionalTriagem,
@@ -36,9 +36,9 @@ def get_patients(setor=None, ala=None):
     # haval: hours since the last nutritional evaluation (correlated subquery)
     haval_subq = (
         db.session.query(
-            func.max(NutritionalAvaliacao.created_at)
+            func.max(NutritionalScreening.created_at)
         )
-        .filter(NutritionalAvaliacao.admissionNumber == Patient.admissionNumber)
+        .filter(NutritionalScreening.admissionNumber == Patient.admissionNumber)
         .correlate(Patient)
         .scalar_subquery()
     )
@@ -64,10 +64,10 @@ def get_patients(setor=None, ala=None):
 
     # conduta: last registered conduct
     conduta_subq = (
-        db.session.query(NutritionalAvaliacao.conduta)
-        .filter(NutritionalAvaliacao.admissionNumber == Patient.admissionNumber)
+        db.session.query(NutritionalScreening.conduta)
+        .filter(NutritionalScreening.admissionNumber == Patient.admissionNumber)
         .correlate(Patient)
-        .order_by(NutritionalAvaliacao.created_at.desc())
+        .order_by(NutritionalScreening.created_at.desc())
         .limit(1)
         .scalar_subquery()
     ).label("conduta")

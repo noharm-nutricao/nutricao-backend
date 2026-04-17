@@ -30,12 +30,12 @@ class Triagem(db.Model):
     update_at = db.Column("update_at", db.DateTime, nullable=True)
 
 
-class NutricionalNrs(db.Model):
-    """Table nutricional_nrs - NRS nutritional component input per admission cycle."""
+#class NutricionalNrs(db.Model):
+ #   """Table nutricional_nrs - NRS nutritional component input per admission cycle."""
 
-    __tablename__ = "nutricional_nrs"
+ #   __tablename__ = "nutricional_nrs"
 
-    id = db.Column("id", db.BigInteger, primary_key=True)
-    admissionNumber = db.Column("nratendimento", db.BigInteger, nullable=False)
-    nrs_nut = db.Column("nrs_nut", db.SmallInteger, nullable=False)
-    created_at = db.Column("created_at", db.DateTime, nullable=False)
+ #   id = db.Column("id", db.BigInteger, primary_key=True)
+   # admissionNumber = db.Column("nratendimento", db.BigInteger, nullable=False)
+   # nrs_nut = db.Column("nrs_nut", db.SmallInteger, nullable=False)
+  #  created_at = db.Column("created_at", db.DateTime, nullable=False)
