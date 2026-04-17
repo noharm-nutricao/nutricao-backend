@@ -69,6 +69,7 @@ class PrescriptionAudit(db.Model):
 
 
 class Patient(db.Model):
+    __table_args__ = {"schema": "demo"}
     __tablename__ = "pessoa"
 
     idPatient = db.Column("fkpessoa", db.BigInteger, nullable=False)

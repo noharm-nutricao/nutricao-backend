@@ -1,7 +1,6 @@
 """Repository for nutritional patients listing query."""
 
-from sqlalchemy import case, extract, func, literal
-from sqlalchemy.dialects.postgresql import INTERVAL
+from sqlalchemy import case, extract, func, literal, or_, text
 
 from models.appendix import Department, SegmentDepartment
 from models.enums import SegmentTypeEnum
@@ -10,34 +9,23 @@ from models.nutritional import (
     NutritionalScreening,
     NutritionalD7,
     NutritionalGlim,
-    NutritionalTriagem,
 )
 from models.prescription import Patient
 from models.segment import Segment
 
 
 def get_patients(setor=None, ala=None):
-    """Return active admissions with basic patient data for nutrition module.
+    """Return active admissions with basic patient data for nutrition module."""
 
-    Args:
-        setor: Optional department id filter.
-        ala: Optional ward type filter ('UTI' or other).
-
-    Returns:
-        List of result rows with patient and derived nutritional fields.
-    """
-
-    # Derive ala label from segment type: ICU (3) = UTI, else 'Enfermaria'
+    # Derive ala label from segment type
     ala_label = case(
         (Segment.type == SegmentTypeEnum.ICU.value, literal("UTI")),
         else_=literal("Enfermaria"),
     ).label("ala")
 
-    # haval: hours since the last nutritional evaluation (correlated subquery)
+    # haval
     haval_subq = (
-        db.session.query(
-            func.max(NutritionalScreening.created_at)
-        )
+        db.session.query(func.max(NutritionalScreening.created_at))
         .filter(NutritionalScreening.nratendimento == Patient.admissionNumber)
         .correlate(Patient)
         .scalar_subquery()
@@ -47,14 +35,14 @@ def get_patients(setor=None, ala=None):
         extract("epoch", func.now() - haval_subq) / 3600.0
     ).label("haval")
 
-    # d7: true when at least one active D7 with dt_prevista <= NOW() + 48h
+    # d7
     d7_subq = (
         db.session.query(func.count())
         .filter(NutritionalD7.nratendimento == Patient.admissionNumber)
-        .filter(NutritionalD7.concluido == False)
+        .filter(NutritionalD7.concluido.is_(False))
         .filter(
             NutritionalD7.dt_prevista
-            <= func.now() + func.cast("48 hours", INTERVAL)
+            <= func.now() + text("interval '48 hours'")
         )
         .correlate(Patient)
         .scalar_subquery()
@@ -62,19 +50,7 @@ def get_patients(setor=None, ala=None):
 
     d7_expr = (d7_subq > 0).label("d7")
 
-# !! REMOVIDO SEM SENTIDO NO DIA 16/04 !!
-
-    # # conduta: last registered conduct
-    # conduta_subq = (
-    #     db.session.query(NutritionalScreening.conduta)
-    #     .filter(NutritionalScreening.nratendimento == Patient.admissionNumber)
-    #     .correlate(Patient)
-    #     .order_by(NutritionalScreening.created_at.desc())
-    #     .limit(1)
-    #     .scalar_subquery()
-    # ).label("conduta")
-
-    # sev: severity classification from latest triage
+    # sev
     sev_subq = (
         db.session.query(NutritionalScreening.classificacao)
         .filter(NutritionalScreening.nratendimento == Patient.admissionNumber)
@@ -84,7 +60,7 @@ def get_patients(setor=None, ala=None):
         .scalar_subquery()
     ).label("sev")
 
-    # GLIM diagnosis fields
+    # GLIM
     glim_diag_subq = (
         db.session.query(NutritionalGlim.diagnostico)
         .filter(NutritionalGlim.nratendimento == Patient.admissionNumber)
@@ -127,7 +103,6 @@ def get_patients(setor=None, ala=None):
             Patient.id_icd.label("idcid"),
             haval_expr,
             d7_expr,
-            # conduta_subq,
             sev_subq,
             glim_diag_subq,
             glim_fen_subq,
@@ -151,15 +126,25 @@ def get_patients(setor=None, ala=None):
         .filter(Patient.dischargeDate.is_(None))
     )
 
+    # filtros
     if setor is not None:
         query = query.filter(Patient.idDepartment == setor)
 
     if ala is not None:
-        if ala.upper() == "UTI":
+        ala = ala.upper()
+
+        if ala == "UTI":
             query = query.filter(Segment.type == SegmentTypeEnum.ICU.value)
-        elif ala.upper() == "ENFERMARIA":
-            query = query.filter(Segment.type != SegmentTypeEnum.ICU.value)
+
+        elif ala == "ENFERMARIA":
+            query = query.filter(
+                or_(
+                    Segment.type != SegmentTypeEnum.ICU.value,
+                    Segment.type.is_(None),
+                )
+            )
+
         else:
-            query = query.filter(Segment.type == None)
+            query = query.filter(Segment.type.is_(None))
 
     return query.all()

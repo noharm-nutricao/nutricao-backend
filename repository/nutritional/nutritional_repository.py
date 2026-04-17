@@ -3,10 +3,49 @@ from sqlalchemy import text
 from models.enums import SegmentTypeEnum
 from models.main import db
 from models.nutritional import NutritionalScreening
+from models.prescription import Patient
+
 
 def get_patients_repository():
-    #toDO
-    pass
+    rows = db.session.query(Patient).all()
+
+    return [
+        {
+            "id": r.admissionNumber,
+            "fkpessoa": r.idPatient,
+            "fkhospital": r.idHospital,
+            "dtinternacao": r.admissionDate.isoformat() if r.admissionDate else None,
+            "dtnascimento": r.birthdate.isoformat() if r.birthdate else None,
+            "sexo": r.gender,
+            "peso": r.weight,
+            "altura": r.height,
+            "leito": r.bed,
+            "fksetor": r.idDepartment,
+            "dtpeso": r.weightDate.isoformat() if r.weightDate else None,
+            "anotacao": r.observation,
+            "cor": r.skinColor,
+            "update_at": r.update.isoformat() if r.update else None,
+            "update_by": r.user,
+            "alertatexto": r.alert,
+            "alertadata": r.alertDate.isoformat() if r.alertDate else None,
+            "alertavigencia": r.alertExpire.isoformat() if r.alertExpire else None,
+            "alerta_by": r.alertBy,
+            "motivoalta": r.dischargeReason,
+            "dtalta": r.dischargeDate.isoformat() if r.dischargeDate else None,
+            "dialise": r.dialysis,
+            "lactante": r.lactating,
+            "gestante": r.pregnant,
+            "st_concilia": r.st_conciliation,
+            "marcadores": r.tags if r.tags else [],
+            "medico_responsavel": r.responsiblePhysician,
+            "idcid": r.id_icd,
+            "dt_ultima_transferencia": r.lastTransferDate.isoformat() if r.lastTransferDate else None,
+            "dt_alta_prevista": r.dischargeDateForecast.isoformat() if r.dischargeDateForecast else None,
+            "cidade": r.city,
+        }
+        for r in rows
+    ]
+
 
 def save_manual_mnutric(admission_number: int, mnutric: dict):
     if not _is_nutritional_screening_table_ready():
