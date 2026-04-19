@@ -48,6 +48,11 @@ def get_patients_repository():
 
 
 def save_manual_mnutric(admission_number: int, mnutric: dict):
+    """Persiste entrada manual do nutricionista (PUT /mnutric-manual).
+
+    Seta mn_apache_manual=True e mn_sofa_manual=True sinalizando que
+    APACHE II e SOFA foram informados — libera dados_incompletos=False no frontend.
+    """
     if not _is_nutritional_screening_table_ready():
         return None
 
@@ -64,15 +69,54 @@ def save_manual_mnutric(admission_number: int, mnutric: dict):
         screening.protocolo = "MNUTRIC"
         db.session.add(screening)
 
-    screening.mn_idade = mnutric["age"]
     screening.mn_apache = mnutric["apache"]
     screening.mn_sofa = mnutric["sofa"]
+    screening.mn_apache_manual = True
+    screening.mn_sofa_manual = True
+    screening.mn_idade = mnutric["age"]
     screening.mn_comor = mnutric["comorbity"]
     screening.mn_dias = mnutric["daysUTI"]
     screening.mn_total = mnutric["total"]
-    screening.mn_apache_manual = True
-    screening.mn_sofa_manual = True
     screening.classificacao = mnutric["classify"]
+
+    db.session.flush()
+
+    return screening
+
+
+def update_mnutric_scores(admission_number: int, mnutric: dict):
+    """Atualiza scores calculados pelo job periódico.
+
+    Preserva mn_apache, mn_sofa e os flags mn_apache_manual/mn_sofa_manual —
+    somente o job chama esta função. Não altera a condição dados_incompletos.
+    """
+    if not _is_nutritional_screening_table_ready():
+        return None
+
+    screening = (
+        db.session.query(NutritionalScreening)
+        .filter(NutritionalScreening.nratendimento == admission_number)
+        .filter(NutritionalScreening.protocolo == "MNUTRIC")
+        .order_by(NutritionalScreening.id.desc())
+        .first()
+    )
+
+    if screening is None:
+        screening = NutritionalScreening()
+        screening.nratendimento = admission_number
+        screening.protocolo = "MNUTRIC"
+        screening.mn_apache_manual = False
+        screening.mn_sofa_manual = False
+        db.session.add(screening)
+
+    screening.mn_idade = mnutric["age"]
+    screening.mn_comor = mnutric["comorbity"]
+    screening.mn_dias = mnutric["daysUTI"]
+
+    dados_incompletos = not screening.mn_apache_manual or not screening.mn_sofa_manual
+    if not dados_incompletos:
+        screening.mn_total = mnutric["total"]
+        screening.classificacao = mnutric["classify"]
 
     db.session.flush()
 
@@ -90,7 +134,7 @@ def get_saved_mnutric(admission_number: int):
         .first()
     )
 
-def get_active_admissions():
+def get_active_admissions(schema: str):
     """Return all active admissions with ICU protocol flag.
 
     Active means dtalta IS NULL. Uses LEFT JOINs on segmentosetor and segmento
@@ -102,6 +146,7 @@ def get_active_admissions():
             nratendimento, fksetor, dtnascimento, dtinternacao,
             peso, altura, idcid, tp_segmento (int|None), is_icu (bool)
     """
+    db.session.execute(text(f'SET LOCAL search_path TO "{schema}"'))
     query = text(
         """
         SELECT
@@ -115,7 +160,7 @@ def get_active_admissions():
             p.dt_ultima_transferencia,
             seg.tp_segmento,
             COALESCE(seg.tp_segmento = :icu_type, false) AS is_icu
-        FROM demo."pessoa" p
+        FROM pessoa p
         LEFT JOIN segmentosetor ss  ON ss.fksetor     = p.fksetor
         LEFT JOIN segmento seg      ON seg.idsegmento  = ss.idsegmento
         WHERE p.dtalta IS NULL

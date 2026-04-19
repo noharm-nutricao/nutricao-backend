@@ -9,7 +9,7 @@ which already raises AuthorizationError in production via api_endpoint_decorator
 
 import logging
 
-from flask import Blueprint
+from flask import Blueprint, current_app
 
 from decorators.api_endpoint_decorator import api_endpoint
 from services.nutritional import nutritional_job_service
@@ -22,9 +22,9 @@ app_nutritional_job = Blueprint("app_nutritional_job", __name__)
 @app_nutritional_job.route("/nutritional/job/run", methods=["POST"])
 @api_endpoint(is_admin=True)
 def run_job():
-    """Trigger the nutritional score recalculation job immediately."""
+    """Trigger the nutritional score recalculation job immediately (all schemas)."""
     logger.info("[US-BE-06] Disparo manual do job solicitado via endpoint.")
-    nutritional_job_service.recalculate_nutritional_scores()
+    nutritional_job_service.recalculate_nutritional_scores(current_app._get_current_object())
     logger.info("[US-BE-06] Disparo manual concluido.")
     return {"message": "Job executado. Verifique os logs."}
 
@@ -32,17 +32,13 @@ def run_job():
 @app_nutritional_job.route("/nutritional/job/status", methods=["GET"])
 @api_endpoint(is_admin=True)
 def job_status():
-    """Return the current scheduler status and next run time."""
-    scheduler = nutritional_job_service.scheduler
-    job = scheduler.get_job("nutritional_score_recalc")
-
-    if not scheduler.running:
-        return {"scheduler": "stopped", "job": None}
-
+    """Return whether the background recalculation thread is alive."""
+    import threading
+    thread = next(
+        (t for t in threading.enumerate() if t.name == "nutritional-recalc"),
+        None,
+    )
     return {
-        "scheduler": "running",
-        "job": {
-            "id": job.id if job else None,
-            "next_run": job.next_run_time.isoformat() if job and job.next_run_time else None,
-        },
+        "scheduler": "running" if thread and thread.is_alive() else "stopped",
+        "thread": thread.name if thread else None,
     }

@@ -119,14 +119,6 @@ def update_nrs_nut(nratendimento, request_data, user_context: User):
         triagem.protocolo = "MNUTRIC"
         db.session.add(triagem)
 
-    triagem.mn_apache = request_data.apache_ii
-    triagem.mn_sofa = request_data.sofa
-    triagem.mn_apache_manual = True
-    triagem.mn_sofa_manual = True
-    triagem.dados_incompletos = False
-    triagem.updated_at = now
-    triagem.updated_by = user_context.id
-
     age = _calculate_age(patient.birthdate)
     dias = _calculate_days(patient.admissionDate)
 
@@ -135,6 +127,13 @@ def update_nrs_nut(nratendimento, request_data, user_context: User):
     mn_sofa = _mnutric_score_sofa(request_data.sofa)
     mn_comor = _mnutric_score_comor(patient.id_icd)
     mn_dias = _mnutric_score_dias(dias)
+
+    triagem.mn_apache = mn_apache
+    triagem.mn_sofa = mn_sofa
+    triagem.mn_apache_manual = True
+    triagem.mn_sofa_manual = True
+    triagem.updated_at = now
+    triagem.updated_by = user_context.id
 
     mnutric_total = mn_idade + mn_apache + mn_sofa + mn_comor + mn_dias
     triagem.mnutric_total = mnutric_total
@@ -184,13 +183,19 @@ def update_nrs_nut(nratendimento, request_data, user_context: User):
 
 
 def _get_segment_type(nratendimento):
+    schema = (
+        db.session.connection()
+        .get_execution_options()
+        .get("schema_translate_map", {})
+        .get(None) or "demo"
+    )
     result = db.session.execute(
         text(
-            """
+            f"""
             SELECT seg.tp_segmento
-            FROM pessoa p
-            JOIN segmentosetor ss ON ss.fksetor = p.fksetor
-            JOIN segmento seg ON seg.idsegmento = ss.idsegmento
+            FROM "{schema}".pessoa p
+            JOIN "{schema}".segmentosetor ss ON ss.fksetor = p.fksetor
+            JOIN "{schema}".segmento seg ON seg.idsegmento = ss.idsegmento
             WHERE p.nratendimento = :nratendimento
             LIMIT 1
             """
