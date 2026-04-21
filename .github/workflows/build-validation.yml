@@ -24,26 +24,14 @@ jobs:
 
       - name: Aguardar API
         run: |
-          SUCCESS=false
-
-          for i in {1..40}; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/nutritional/healthz)
-
-            echo "Tentativa $i - Status: $STATUS"
-
-            if [ "$STATUS" -eq 200 ]; then
-              echo "✅ API pronta!"
-              SUCCESS=true
-              break
+          for i in {1..20}; do
+            if curl -s http://localhost:5000/nutritional/healthz; then
+              exit 0
             fi
-
             sleep 5
           done
-
-          if [ "$SUCCESS" = false ]; then
-            echo "⚠️ API não respondeu com 200 em 200s"
-            docker compose -f docker-compose.nitra.yml logs
-          fi
+          docker compose logs
+          exit 1
 
       - name: Derrubar
         if: always()
