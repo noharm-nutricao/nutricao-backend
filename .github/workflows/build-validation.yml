@@ -1,0 +1,38 @@
+name: build-validation.yml
+
+on:
+  pull_request:
+    branches: [develop]
+
+jobs:
+  docker-build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo principal
+        uses: actions/checkout@v4
+
+      - name: Clonar repo do database
+        run: |
+          git clone https://github.com/noharm-nutricao/nutricao-database.git database
+
+      - name: Build containers
+        run: docker compose -f docker-compose.nitra.yml build
+
+      - name: Subir stack
+        run: docker compose -f docker-compose.nitra.yml up -d
+
+      - name: Aguardar API
+        run: |
+          for i in {1..20}; do
+            if curl -s http://localhost:5000/nutritional/healthz; then
+              exit 0
+            fi
+            sleep 5
+          done
+          docker compose logs
+          exit 1
+
+      - name: Derrubar
+        if: always()
+        run: docker compose -f docker-compose.nitra.yml down -v
