@@ -17,4 +17,4 @@ instructions: |
   Stack: Python, Flask, SQLAlchemy, PostgreSQL.
   Siga os padrões da arquitetura em camadas: routes → services → repository → models.
   Verifique: boas práticas Python, segurança, performance em queries SQL,
-  nomenclatura em português para variáveis de domínio clínico.
+  nomenclatura em português para variáveis de domínio clínico TESTE.
