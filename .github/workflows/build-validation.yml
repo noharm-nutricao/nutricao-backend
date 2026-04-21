@@ -17,15 +17,15 @@ jobs:
           git clone https://github.com/noharm-nutricao/nutricao-database.git database
 
       - name: Build containers
-        run: docker compose build
+        run: docker compose -f docker-compose.nitra.yml build
 
       - name: Subir stack
-        run: docker compose up -d
+        run: docker compose -f docker-compose.nitra.yml up -d
 
       - name: Aguardar API
         run: |
           for i in {1..20}; do
-            if curl -s http://localhost:5000/health; then
+            if curl -s http://localhost:5000/healthz; then
               exit 0
             fi
             sleep 5
@@ -35,4 +35,4 @@ jobs:
 
       - name: Derrubar
         if: always()
-        run: docker compose down -v
+        run: docker compose -f docker-compose.nitra.yml down -v
