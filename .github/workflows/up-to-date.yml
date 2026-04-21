@@ -1,0 +1,24 @@
+name: up-to-date.yml
+
+on:
+  pull_request:
+    branches: [develop]
+
+jobs:
+  check-up-to-date:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Fetch develop
+        run: git fetch origin develop
+
+      - name: Verifica se está atualizado
+        run: |
+          BEHIND=$(git rev-list --left-right --count origin/develop...HEAD | awk '{print $1}')
+          if [ "$BEHIND" -ne 0 ]; then
+            echo "Branch está desatualizada com develop"
+            exit 1
+          fi
