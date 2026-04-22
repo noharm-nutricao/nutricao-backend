@@ -115,7 +115,7 @@ class NutritionalTriagem(db.Model):
     updated_at = db.Column("updated_at", db.DateTime, nullable=True)
     updated_by = db.Column("updated_by", db.BigInteger, nullable=True)
 
-class NutrtionalAlert(db.Model):
+class NutritionalAlert(db.Model):
     __tablename__ = "nutricional_alerta"
 
     id = db.Column("id", db.Integer, primary_key=True)
