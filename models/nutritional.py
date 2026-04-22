@@ -90,6 +90,7 @@ class NutritionalD7(db.Model):
     concluido = db.Column("concluido", db.Boolean, nullable=True)
     idusuario = db.Column("idusuario", db.Integer, nullable=True)
     created_at = db.Column("created_at", db.DateTime, nullable=True)
+    updated_at = db.Column("updated_at", db.DateTime, nullable=True, onupdate=func.now())
 
 class NutritionalTriagem(db.Model):
     __tablename__ = "nutricional_triagem_pedro"
@@ -124,3 +125,6 @@ class NutrtionalAlert(db.Model):
     severidade = db.Column("severidade", db.String, nullable=True)
     ativo = db.Column("ativo", db.Boolean, nullable=True)
     created_at = db.Column("created_at", db.DateTime, nullable=True)
+    reconhecido = db.Column("reconhecido", db.Boolean, nullable=True)
+    reconhecido_por = db.Column("reconhecido_por", db.Integer, nullable=False)
+    reconhecido_at = db.Column("reconhecido_at", db.DateTime, nullable=True)
