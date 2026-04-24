@@ -1,9 +1,12 @@
 from decorators.has_permission_decorator import has_permission
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
+from models.main import User
+from models.nutritional import NutritionalD7
 from repository.nutritional import nutritional_repository
 from security.permission import Permission
+from utils.dateutils import now_sp
 import logging
 
 @has_permission(Permission.READ_PRESCRIPTION)
@@ -212,6 +215,56 @@ def _restore_sofa_from_dimension(score):
         return 10
 
     return score
+
+def _calculate_status(d7: NutritionalD7) -> str:
+    if d7.concluido:
+        return "concluido"
+
+    now = now_sp()
+    dt_prevista = d7.dt_prevista
+
+    if dt_prevista.tzinfo is None:
+        dt_prevista = dt_prevista.replace(tzinfo=timezone.utc)
+
+    if dt_prevista > now + timedelta(hours=48):
+        return "pendente"
+    if dt_prevista > now:
+        return "vencendo"
+    return "vencido"
+
+
+def _d7_to_dict(d7: NutritionalD7) -> dict:
+    return {
+        "id": d7.id,
+        "dt_prevista": d7.dt_prevista.isoformat() if d7.dt_prevista else None,
+        "concluido": d7.concluido,
+        "status": _calculate_status(d7),
+        # "updated_at": d7.updated_at.isoformat() if d7.updated_at else None,
+    }
+
+
+@has_permission(Permission.WRITE_NUTRITIONAL)
+def create_d7(nratendimento: int, user_context: User):
+    d7 = nutritional_repository.upsert_d7(
+        nratendimento=nratendimento,
+        idusuario=user_context.id,
+    )
+    return _d7_to_dict(d7)
+
+
+@has_permission(Permission.WRITE_NUTRITIONAL)
+def get_d7(nratendimento: int, user_context: User):
+    d7 = nutritional_repository.get_active_d7(nratendimento)
+    if d7 is None:
+        return None
+    return _d7_to_dict(d7)
+
+
+@has_permission(Permission.WRITE_NUTRITIONAL)
+def close_d7(nratendimento: int, id: int, user_context: User):
+    d7 = nutritional_repository.close_d7(id=id, nratendimento=nratendimento)
+    return _d7_to_dict(d7)
+
 
 def get_patients_by_nra(nratendimento: int):
     """
