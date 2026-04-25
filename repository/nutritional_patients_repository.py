@@ -20,7 +20,7 @@ def get_patients(setor=None, ala=None):
     # Derive ala label from segment type
     ala_label = case(
         (Segment.type == SegmentTypeEnum.ICU.value, literal("UTI")),
-        else_=literal("Enfermaria"),
+        else_=Segment.description,
     ).label("ala")
 
     # haval
@@ -55,7 +55,7 @@ def get_patients(setor=None, ala=None):
         db.session.query(NutritionalScreening.classificacao)
         .filter(NutritionalScreening.nratendimento == Patient.admissionNumber)
         .correlate(Patient)
-        .order_by(NutritionalScreening.created_at.desc())
+        .order_by(NutritionalScreening.id.desc())
         .limit(1)
         .scalar_subquery()
     ).label("sev")
@@ -88,6 +88,46 @@ def get_patients(setor=None, ala=None):
         .scalar_subquery()
     ).label("glim_etiol")
 
+    # campo1 — NRS-2002 score fields from latest NRS2002 screening row
+    nrs_data_subq = (
+        db.session.query(
+            func.json_build_object(
+                "nrs_total", NutritionalScreening.nrs_total,
+                "nrs_nut", NutritionalScreening.nrs_nut,
+                "nrs_doenca", NutritionalScreening.nrs_doenca,
+                "nrs_idade", NutritionalScreening.nrs_idade,
+            )
+        )
+        .filter(NutritionalScreening.nratendimento == Patient.admissionNumber)
+        .filter(NutritionalScreening.protocolo == "NRS2002")
+        .correlate(Patient)
+        .order_by(NutritionalScreening.id.desc())
+        .limit(1)
+        .scalar_subquery()
+    ).label("nrs_data")
+
+    # campo1 — mNUTRIC score fields from latest MNUTRIC screening row
+    mnutric_data_subq = (
+        db.session.query(
+            func.json_build_object(
+                "mn_total", NutritionalScreening.mn_total,
+                "mn_idade", NutritionalScreening.mn_idade,
+                "mn_apache", NutritionalScreening.mn_apache,
+                "mn_sofa", NutritionalScreening.mn_sofa,
+                "mn_comor", NutritionalScreening.mn_comor,
+                "mn_dias", NutritionalScreening.mn_dias,
+                "mn_apache_manual", NutritionalScreening.mn_apache_manual,
+                "mn_sofa_manual", NutritionalScreening.mn_sofa_manual,
+            )
+        )
+        .filter(NutritionalScreening.nratendimento == Patient.admissionNumber)
+        .filter(NutritionalScreening.protocolo == "MNUTRIC")
+        .correlate(Patient)
+        .order_by(NutritionalScreening.id.desc())
+        .limit(1)
+        .scalar_subquery()
+    ).label("mnutric_data")
+
     query = (
         db.session.query(
             Patient.admissionNumber.label("id"),
@@ -107,18 +147,20 @@ def get_patients(setor=None, ala=None):
             glim_diag_subq,
             glim_fen_subq,
             glim_etiol_subq,
+            nrs_data_subq,
+            mnutric_data_subq,
         )
         .select_from(Patient)
-        .join(
+        .outerjoin(
             SegmentDepartment,
             (SegmentDepartment.idDepartment == Patient.idDepartment)
             & (SegmentDepartment.idHospital == Patient.idHospital),
         )
-        .join(
+        .outerjoin(
             Segment,
             Segment.id == SegmentDepartment.id,
         )
-        .join(
+        .outerjoin(
             Department,
             (Department.id == Patient.idDepartment)
             & (Department.idHospital == Patient.idHospital),

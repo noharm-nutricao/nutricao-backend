@@ -1,89 +1,174 @@
 """Nutritional job service — US-BE-06.
 
 Periodic recalculation of Campo 1 scores (NRS-2002 and mNUTRIC) for all
-active admissions. Scheduled via APScheduler with a configurable interval
-(default: 15 minutes).
+active admissions across every active tenant schema.
 
-Dependencies: US-BE-04 (NRS engine) and US-BE-05 (mNUTRIC engine) must be
-implemented before this job can perform actual score updates.
+Runs outside the JWT request context: schema is set manually via
+dbSession.setSchema() before each database operation, and re-set after
+every commit/rollback (SQLAlchemy releases the connection on transaction end).
 """
 
-import atexit
 import logging
 import os
-from concurrent.futures import ThreadPoolExecutor
-from concurrent.futures import TimeoutError as FuturesTimeoutError
-
-from apscheduler.schedulers.background import BackgroundScheduler
+import threading
+import time
+from types import SimpleNamespace
 
 from config import Config
-from models.main import db
+from models.main import User, db, dbSession
 from repository.nutritional import nutritional_repository
-from services.nutritional import nutritional_patient_service
+from repository.nutritional.nutritional_nrs_repository import get_patient_department
+from services.nutritional import nutritional_nrs_service, nutritional_patient_service
+from services.nutritional.nutritional_nrs_service import is_uti_wrapper
 
 logger = logging.getLogger("noharm.nutritional")
 
-scheduler = BackgroundScheduler()
 
+def _get_active_schemas() -> list:
+    """Return all distinct schemas with at least one active user.
 
-def recalculate_nutritional_scores():
-    """Recalculate Campo 1 scores for all active admissions.
-
-    Processes each active admission independently so that an error in one
-    patient does not interrupt the rest of the batch. Logs total processed
-    count and error count at the end of each run.
+    Queries public.usuario — always accessible without schema_translate_map
+    because User.__table_args__ has schema='public'.
     """
-    logger.info("Iniciando recalculo de scores nutricionais...")
-    patients = nutritional_repository.get_active_admissions()
+    rows = (
+        db.session.query(User.schema)
+        .filter(User.active == True)
+        .distinct()
+        .all()
+    )
+    return [r[0] for r in rows]
+
+
+def _recalculate_schema(schema: str) -> tuple:
+    """Recalculate Campo 1 for all active admissions in a single tenant schema.
+
+    Sets schema_translate_map + search_path before each operation so that
+    both ORM queries (is_uti, recalculate_nrs) and raw SQL (get_active_admissions)
+    resolve to the correct tenant tables.
+
+    Returns (processed, errors) counts.
+    """
+    logger.info("Iniciando recalculo schema=%s", schema)
+
+    dbSession.setSchema(schema)
+    patients = nutritional_repository.get_active_admissions(schema=schema)
     processed, errors = 0, 0
 
     for patient in patients:
+        # Re-set after every commit/rollback — SQLAlchemy releases the connection
+        # that held schema_translate_map on transaction end.
+        dbSession.setSchema(schema)
         try:
-            if patient.is_icu:
-                result = nutritional_patient_service.recalculate_mnutric(patient)
+            patient_is_icu = is_uti_wrapper(
+                patient.nratendimento,
+                get_patient_segment_type_fn=lambda _: patient.tp_segmento,
+                get_patient_department_fn=get_patient_department,
+            )
+            patient_ns = SimpleNamespace(
+                admissionNumber=patient.nratendimento,
+                birthdate=patient.dtnascimento,
+                id_icd=patient.idcid or "",
+            )
 
+            if patient_is_icu:
+                result = nutritional_patient_service.recalculate_mnutric(patient)
                 if result is None:
                     logger.error(
-                        "Falha ao recalcular mNUTRIC para nratendimento=%s: retorno None",
+                        "Falha mNUTRIC nratendimento=%s schema=%s: retorno None",
                         patient.nratendimento,
+                        schema,
                     )
                     errors += 1
                     continue
-
                 logger.info(
-                    "mNUTRIC recalculado com sucesso para nratendimento=%s",
+                    "mNUTRIC recalculado nratendimento=%s schema=%s",
                     patient.nratendimento,
+                    schema,
                 )
-            else:
-                # TODO (US-BE-04): nutritional_score_service.recalculate_nrs(patient)
-                pass
+
+            nutritional_nrs_service.recalculate_nrs(patient_ns)
+            logger.info(
+                "NRS-2002 recalculado nratendimento=%s schema=%s",
+                patient.nratendimento,
+                schema,
+            )
 
             db.session.commit()
             processed += 1
         except Exception as e:
             db.session.rollback()
             logger.error(
-                "Erro ao recalcular nratendimento=%s: %s",
+                "Erro nratendimento=%s schema=%s: %s",
                 patient.nratendimento,
+                schema,
                 e,
                 exc_info=True,
             )
             errors += 1
 
     logger.info(
-        "Recalculo concluido. Processados: %d, Erros: %d", processed, errors
+        "schema=%s concluido. Processados: %d, Erros: %d",
+        schema,
+        processed,
+        errors,
     )
+    return processed, errors
 
 
-def init_scheduler(app):
-    """Register and start the scheduler bound to the Flask app context.
+def recalculate_nutritional_scores(app):
+    """Recalculate Campo 1 scores for every active tenant schema.
+
+    Called by the background thread and by the manual trigger endpoint
+    POST /nutritional/job/run. Pushes its own app context so it can run
+    inside a thread that does not inherit the caller's context.
+
+    Args:
+        app: Flask application instance.
+    """
+    with app.app_context():
+        schemas = _get_active_schemas()
+        logger.info(
+            "Iniciando recalculo nutricional: %d schema(s) encontrado(s): %s",
+            len(schemas),
+            schemas,
+        )
+
+        total_processed, total_errors = 0, 0
+        for schema in schemas:
+            try:
+                processed, errors = _recalculate_schema(schema)
+                total_processed += processed
+                total_errors += errors
+            except Exception as e:
+                logger.error(
+                    "Erro inesperado no schema=%s: %s", schema, e, exc_info=True
+                )
+
+        logger.info(
+            "Recalculo concluido. Total processados: %d, Total erros: %d",
+            total_processed,
+            total_errors,
+        )
+
+
+def _scheduler_loop(app, interval_seconds: int) -> None:
+    while True:
+        time.sleep(interval_seconds)
+        try:
+            recalculate_nutritional_scores(app)
+        except Exception:
+            logger.exception("[US-BE-06] Falha inesperada no ciclo do job.")
+
+
+def init_scheduler(app) -> None:
+    """Start the background recalculation thread bound to the Flask app.
 
     Should be called once from the app factory. Reads SCHEDULER_ENABLED and
     SCHEDULER_INTERVAL_MINUTES from Config to allow disabling the job in
     test/CI environments.
 
     Guards against Werkzeug's development reloader, which spawns two processes:
-    only the child process (WERKZEUG_RUN_MAIN=true) starts the scheduler.
+    only the child process (WERKZEUG_RUN_MAIN=true) starts the thread.
 
     Args:
         app: Flask application instance (needed for app context inside the job)
@@ -92,37 +177,20 @@ def init_scheduler(app):
         logger.info("Scheduler desabilitado (SCHEDULER_ENABLED=false).")
         return
 
-    # Werkzeug reloader guard: avoid starting two schedulers in development
     if app.debug and os.environ.get("WERKZEUG_RUN_MAIN") != "true":
         return
 
-    interval_minutes = Config.SCHEDULER_INTERVAL_MINUTES
+    interval_seconds = Config.SCHEDULER_INTERVAL_MINUTES * 60
 
-    timeout_seconds = Config.SCHEDULER_JOB_TIMEOUT_SECONDS
-
-    def _job_with_context():
-        with app.app_context():
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(recalculate_nutritional_scores)
-                try:
-                    future.result(timeout=timeout_seconds)
-                except FuturesTimeoutError:
-                    logger.error(
-                        "[US-BE-06] Job excedeu timeout de %ds e foi interrompido.",
-                        timeout_seconds,
-                    )
-
-    scheduler.add_job(
-        _job_with_context,
-        trigger="interval",
-        minutes=interval_minutes,
-        id="nutritional_score_recalc",
-        replace_existing=True,
+    t = threading.Thread(
+        target=_scheduler_loop,
+        args=(app, interval_seconds),
+        daemon=True,
+        name="nutritional-recalc",
     )
-    scheduler.start()
-    atexit.register(lambda: scheduler.running and scheduler.shutdown(wait=False))
+    t.start()
 
     logger.info(
-        "Scheduler iniciado. Job nutritional_score_recalc a cada %d min.",
-        interval_minutes,
+        "Scheduler iniciado (thread daemon). Recalculo a cada %d min.",
+        Config.SCHEDULER_INTERVAL_MINUTES,
     )

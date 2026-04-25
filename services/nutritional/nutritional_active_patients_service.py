@@ -91,7 +91,7 @@ def get_patients(request_data: NutritionalPatientsRequest):
                 "npo": None,  # from demo.presmed - not implemented in this US
                 "alergia": None,  # from demo.pessoa - not implemented in this US
                 "al_ok": True,  # default: true when alergia is null
-                "campo1": None,  # null in this US (populated in US-BE-07)
+                "campo1": _build_campo1(protocolo, row),
                 "glim_diag": glim_diag,
                 "glim_fen": glim_fen,
                 "glim_etiol": glim_etiol,
@@ -145,4 +145,67 @@ def _calculate_imc(peso, altura):
     if peso and altura and altura > 0:
         altura_m = altura / 100.0
         return round(peso / (altura_m**2), 1)
+    return None
+
+
+def _build_campo1(protocolo, row):
+    """Build campo1 dict from the latest screening scores.
+
+    Returns None if no score has been calculated yet for this admission.
+    For MNUTRIC patients, NRS scores are included when available.
+    """
+    nrs = row.nrs_data or {}
+    mn = row.mnutric_data or {}
+
+    if protocolo == "NRS2002":
+        if not nrs or nrs.get("nrs_total") is None:
+            return None
+        return {
+            "nrs_total": nrs["nrs_total"],
+            "nrs_dims": {
+                "nut": nrs.get("nrs_nut") or 0,
+                "doenca": nrs.get("nrs_doenca") or 0,
+                "idade": nrs.get("nrs_idade") or 0,
+            },
+        }
+
+    if protocolo == "MNUTRIC":
+        if not mn:
+            return None
+
+        apache_manual = mn.get("mn_apache_manual") or False
+        sofa_manual = mn.get("mn_sofa_manual") or False
+        dados_incompletos = not apache_manual or not sofa_manual
+
+        if dados_incompletos:
+            return {
+                "dados_incompletos": True,
+                "mn_dims": {
+                    "idade": mn.get("mn_idade") or 0,
+                    "apache": None,
+                    "sofa": None,
+                    "comor": mn.get("mn_comor") or 0,
+                    "dias": mn.get("mn_dias") or 0,
+                },
+            }
+
+        result = {
+            "mnutric_total": mn["mn_total"],
+            "mn_dims": {
+                "idade": mn.get("mn_idade") or 0,
+                "apache": mn.get("mn_apache") or 0,
+                "sofa": mn.get("mn_sofa") or 0,
+                "comor": mn.get("mn_comor") or 0,
+                "dias": mn.get("mn_dias") or 0,
+            },
+        }
+        if nrs and nrs.get("nrs_total") is not None:
+            result["nrs_total"] = nrs["nrs_total"]
+            result["nrs_dims"] = {
+                "nut": nrs.get("nrs_nut") or 0,
+                "doenca": nrs.get("nrs_doenca") or 0,
+                "idade": nrs.get("nrs_idade") or 0,
+            }
+        return result
+
     return None

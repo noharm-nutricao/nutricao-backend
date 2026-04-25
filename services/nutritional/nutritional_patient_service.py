@@ -28,16 +28,20 @@ def save_manual_mnutric(admission_number: int, mnutric: dict):
     )
 
 def calculate_mnutric(patient, apache, sofa) -> dict:
-    today             = datetime.now()
-    uti_days          = (today.date() - patient.utiEntryDate.date()).days
-    dados_incompletos = (apache is None) or (sofa is None)
+    """Calcula e persiste mNUTRIC a partir de entrada manual (PUT /mnutric-manual).
+
+    apache e sofa são os valores brutos informados pelo nutricionista.
+    Seta mn_apache_manual=True e mn_sofa_manual=True via save_manual_mnutric.
+    """
+    today        = datetime.now()
+    uti_days     = (today.date() - patient.utiEntryDate.date()).days
 
     mnutric_age       = _mnutric_age(patient.birthdate)
-    mnutric_apache    = _mnutric_apache_ii(apache) if apache is not None else 0
-    mnutric_sofa      = _mnutric_sofa(sofa) if sofa is not None else 0
+    mnutric_apache    = _mnutric_apache_ii(apache)
+    mnutric_sofa      = _mnutric_sofa(sofa)
     mnutric_comorbity = _mnutric_comorbity(patient.id_icd)
     mnutric_days_uti  = _mnutric_days_uti(uti_days)
-    mnutric           = (mnutric_age + mnutric_apache + mnutric_sofa + mnutric_comorbity + mnutric_days_uti)
+    mnutric           = mnutric_age + mnutric_apache + mnutric_sofa + mnutric_comorbity + mnutric_days_uti
 
     result = {
         "total"            : mnutric,
@@ -46,8 +50,8 @@ def calculate_mnutric(patient, apache, sofa) -> dict:
         "sofa"             : mnutric_sofa,
         "comorbity"        : mnutric_comorbity,
         "daysUTI"          : mnutric_days_uti,
-        "classify"         : _mnutric_clasify(mnutric) if not dados_incompletos else None,
-        "dados_incompletos": dados_incompletos,
+        "classify"         : _mnutric_clasify(mnutric),
+        "dados_incompletos": False,
     }
 
     if getattr(patient, "admissionNumber", None) is not None:
@@ -117,6 +121,12 @@ def _mnutric_clasify(mnutric: int) -> str:
         return "unknown"
 
 def recalculate_mnutric(patient):
+    """Recalculo periódico pelo job — preserva flags manuais de APACHE/SOFA.
+
+    dados_incompletos é derivado dos flags mn_apache_manual/mn_sofa_manual:
+    se o nutricionista ainda não inseriu os valores via PUT, o reconhecimento
+    permanece bloqueado no frontend.
+    """
     admission_number = getattr(patient, "nratendimento", None)
     birthdate = getattr(patient, "dtnascimento", None)
     admission_date = getattr(patient, "dtinternacao", None)
@@ -137,10 +147,33 @@ def recalculate_mnutric(patient):
     )
 
     screening = nutritional_repository.get_saved_mnutric(admission_number)
-    apache = _restore_apache_ii_from_dimension(getattr(screening, "mn_apache", None))
-    sofa = _restore_sofa_from_dimension(getattr(screening, "mn_sofa", None))
+    apache_manual = getattr(screening, "mn_apache_manual", False) or False
+    sofa_manual = getattr(screening, "mn_sofa_manual", False) or False
+    dados_incompletos = not apache_manual or not sofa_manual
 
-    result = calculate_mnutric(patient=normalized, apache=apache, sofa=sofa)
+    apache = _restore_apache_ii_from_dimension(getattr(screening, "mn_apache", None)) if apache_manual else None
+    sofa = _restore_sofa_from_dimension(getattr(screening, "mn_sofa", None)) if sofa_manual else None
+
+    today = datetime.now()
+    uti_entry = normalized.utiEntryDate
+    uti_days = (today.date() - uti_entry.date()).days if uti_entry else 0
+
+    result = {
+        "age":          _mnutric_age(normalized.birthdate),
+        "apache":       _mnutric_apache_ii(apache) if apache is not None else None,
+        "sofa":         _mnutric_sofa(sofa) if sofa is not None else None,
+        "comorbity":    _mnutric_comorbity(normalized.id_icd),
+        "daysUTI":      _mnutric_days_uti(uti_days),
+        "dados_incompletos": dados_incompletos,
+        "total":        None,
+        "classify":     None,
+    }
+
+    if not dados_incompletos:
+        result["total"] = sum(v for v in [result["age"], result["apache"], result["sofa"], result["comorbity"], result["daysUTI"]] if v is not None)
+        result["classify"] = _mnutric_clasify(result["total"])
+
+    nutritional_repository.update_mnutric_scores(admission_number, result)
 
     logging.info(
         "mNUTRIC recalculado para nratendimento=%s: total=%s, classify=%s, dados_incompletos=%s",

@@ -40,7 +40,7 @@ def api_endpoint(download_headers=None, is_admin=False, include_total=False):
                 result = f(*args, **kwargs)
 
                 # should check for permission at least once
-                if g.get("permission_test_count", 0) == 0:
+                if not is_admin and g.get("permission_test_count", 0) == 0:
                     raise AuthorizationError()
 
                 db.session.commit()
