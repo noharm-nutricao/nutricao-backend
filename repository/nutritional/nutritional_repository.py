@@ -381,3 +381,20 @@ def create_d7(nratendimento: int, dt_prevista, idusuario: int = None):
     db.session.flush()
 
     return d7
+
+
+
+def get_alertas(nratendimento: int):
+    from models.nutritional import NutritionalAlert
+
+    return (
+        db.session.query(NutritionalAlert)
+        .filter(
+            NutritionalAlert.nratendimento == nratendimento,
+            NutritionalAlert.ativo == True,
+            )
+        .all()
+    )
+
+
+
