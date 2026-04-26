@@ -6,6 +6,7 @@ from models.appendix import Department, SegmentDepartment
 from models.enums import SegmentTypeEnum
 from models.main import db
 from models.nutritional import (
+    NutritionalAssessment,
     NutritionalScreening,
     NutritionalD7,
     NutritionalGlim,
@@ -25,8 +26,8 @@ def get_patients(setor=None, ala=None):
 
     # haval
     haval_subq = (
-        db.session.query(func.max(NutritionalScreening.created_at))
-        .filter(NutritionalScreening.nratendimento == Patient.admissionNumber)
+        db.session.query(func.max(NutritionalAssessment.created_at))
+        .filter(NutritionalAssessment.nratendimento == Patient.admissionNumber)
         .correlate(Patient)
         .scalar_subquery()
     )
