@@ -2,9 +2,15 @@ from decorators.has_permission_decorator import has_permission
 from datetime import datetime
 from types import SimpleNamespace
 
+from exception.validation_error import ValidationError
+from models.nutritional import NutritionalAssessment
+from models.prescription import Patient
 from repository.nutritional import nutritional_repository
 from security.permission import Permission
 import logging
+
+from utils import status
+
 
 @has_permission(Permission.READ_PRESCRIPTION)
 def get_patients():
@@ -232,3 +238,30 @@ def get_patients_by_nra(nratendimento: int):
         raise Exception(
             "Estamos com problemas para consultar pacientes em nossa base, tente novamente mais tarde"
         )
+
+
+def create_assessment(nratendimento: int, data, idusuario: int):
+    patient = get_patients_by_nra(nratendimento)
+
+    if not patient:
+        raise ValidationError("Paciente não encontrado", "errors.notFound", status.HTTP_404_NOT_FOUND)
+
+    assessment = NutritionalAssessment(
+        nratendimento=nratendimento,
+        idusuario=idusuario,
+        conduta=data.conduta,
+        frequencia=data.prox_visita,
+        ingestao=data.ingestao,
+        meta_kcal=data.meta_kcal,
+        meta_prot=data.meta_prot
+    )
+
+    nutritional_repository.create_assessment(assessment)
+
+    return {
+        "id": assessment.id,
+        "conduta": assessment.conduta,
+        "prox_visita": assessment.frequencia,
+        "ingestao": assessment.ingestao,
+        "created_at": assessment.created_at.isoformat()
+    }

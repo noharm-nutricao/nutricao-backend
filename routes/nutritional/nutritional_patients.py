@@ -3,6 +3,7 @@ import logging
 from flask import Blueprint, request
 
 from decorators.api_endpoint_decorator import api_endpoint
+from models.requests.nutritional_assessment_request import NutritionalAssessmentRequest
 from repository.nutritional import nutritional_nrs_repository
 
 from services.nutritional import nutritional_patient_service
@@ -60,3 +61,20 @@ def calculate_mnutric(nratendimento):
 # @api_endpoint()
 def list_patients_with_campo1(nratendimento):
     return nutritional_patient_service.get_patients_by_nra(nratendimento)
+
+
+@app_nutritional.route(
+    "/nutritional/patients/<int:nratendimento>/avaliacoes",
+    methods=["POST"]
+)
+@api_endpoint()
+def create_assessment(nratendimento: int, user_context):
+    data = request.get_json(silent=True) or {}
+
+    payload = NutritionalAssessmentRequest(**data)
+
+    return nutritional_patient_service.create_assessment(
+        nratendimento=nratendimento,
+        data=payload,
+        idusuario=user_context.id
+    )

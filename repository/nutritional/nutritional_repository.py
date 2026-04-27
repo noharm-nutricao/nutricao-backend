@@ -2,7 +2,7 @@ from sqlalchemy import text
 
 from models.enums import SegmentTypeEnum
 from models.main import db
-from models.nutritional import NutritionalScreening
+from models.nutritional import NutritionalScreening, NutritionalAssessment
 from models.prescription import Patient
 
 
@@ -218,3 +218,8 @@ def _is_nutritional_screening_table_ready() -> bool:
     }
 
     return required_columns.issubset(existing_columns)
+
+
+def create_assessment(assessment: NutritionalAssessment):
+    db.session.add(assessment)
+    db.session.flush()
