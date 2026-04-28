@@ -3,7 +3,8 @@ from datetime import datetime
 from types import SimpleNamespace
 
 from exception.validation_error import ValidationError
-from models.nutritional import NutritionalAssessment
+from models.main import db
+from models.nutritional import NutritionalAssessment, NutritionalD7
 from models.prescription import Patient
 from repository.nutritional import nutritional_repository
 from security.permission import Permission
@@ -258,10 +259,107 @@ def create_assessment(nratendimento: int, data, idusuario: int):
 
     nutritional_repository.create_assessment(assessment)
 
+    # Se prox_visita = D7, encerra D7 ativo e cria novo
+    _handle_d7_closure(
+        nratendimento=nratendimento,
+        prox_visita=data.prox_visita,
+        idusuario=idusuario
+    )
+
     return {
         "id": assessment.id,
         "conduta": assessment.conduta,
         "prox_visita": assessment.frequencia,
         "ingestao": assessment.ingestao,
+        "meta_kcal": assessment.meta_kcal,
+        "meta_prot": assessment.meta_prot,
         "created_at": assessment.created_at.isoformat()
+    }
+
+
+def get_assessments(nratendimento: int, limit: int = 10):
+    total, assessments = nutritional_repository.get_assessments_by_nratendimento(
+        nratendimento=nratendimento,
+        limit=limit
+    )
+    
+    return {
+        "data": [
+            {
+                "id": assessment.id,
+                "conduta": assessment.conduta,
+                "prox_visita": assessment.frequencia,
+                "ingestao": assessment.ingestao,
+                "meta_kcal": assessment.meta_kcal,
+                "meta_prot": assessment.meta_prot,
+                "created_at": assessment.created_at.isoformat()
+            }
+            for assessment in assessments
+        ],
+        "total": total
+    }
+
+
+def _calculate_d7_date(prox_visita: str):
+    from datetime import datetime, timedelta
+    
+    now = datetime.now()
+    
+    if prox_visita == "24h":
+        return now + timedelta(hours=24)
+    elif prox_visita == "48h":
+        return now + timedelta(hours=48)
+    elif prox_visita == "semanal":
+        return now + timedelta(days=7)
+    elif prox_visita == "D7":
+        return now + timedelta(days=7)
+    else:  # rotina
+        return now + timedelta(days=30)
+
+
+def _handle_d7_closure(nratendimento: int, prox_visita: str, idusuario: int):
+    if prox_visita == "D7":
+        # Busca D7 ativo
+        active_d7 = nutritional_repository.get_active_d7(nratendimento)
+        
+        if active_d7:
+            # Encerra D7 ativo
+            nutritional_repository.close_d7(active_d7.id)
+        
+        # Cria novo D7
+        dt_prevista = _calculate_d7_date("D7")
+        nutritional_repository.create_d7(
+            nratendimento=nratendimento,
+            dt_prevista=dt_prevista,
+            idusuario=idusuario
+        )
+
+
+def close_and_create_d7(d7_id: int, idusuario: int):
+    # Busca D7 para obter nratendimento
+    d7 = db.session.query(NutritionalD7).filter(NutritionalD7.id == d7_id).first()
+    
+    if not d7:
+        raise ValidationError("D7 não encontrado", "errors.notFound", status.HTTP_404_NOT_FOUND)
+    
+    nratendimento = d7.nratendimento
+    
+    # Encerra D7
+    nutritional_repository.close_d7(d7_id)
+    
+    # Cria novo D7
+    dt_prevista = _calculate_d7_date("D7")
+    new_d7 = nutritional_repository.create_d7(
+        nratendimento=nratendimento,
+        dt_prevista=dt_prevista,
+        idusuario=idusuario
+    )
+    
+    db.session.commit()
+    
+    return {
+        "status": "success",
+        "d7_encerrado": d7_id,
+        "novo_d7_id": new_d7.id,
+        "novo_d7_data": new_d7.dt_prevista.isoformat()
     }

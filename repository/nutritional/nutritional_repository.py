@@ -2,7 +2,7 @@ from sqlalchemy import text
 
 from models.enums import SegmentTypeEnum
 from models.main import db
-from models.nutritional import NutritionalScreening, NutritionalAssessment
+from models.nutritional import NutritionalScreening, NutritionalAssessment, NutritionalD7
 from models.prescription import Patient
 
 
@@ -223,3 +223,94 @@ def _is_nutritional_screening_table_ready() -> bool:
 def create_assessment(assessment: NutritionalAssessment):
     db.session.add(assessment)
     db.session.flush()
+
+
+def get_assessments_by_nratendimento(nratendimento: int, limit: int = 10):
+    """Retorna avaliacoes de um paciente ordenadas por data desc (mais recentes primeiro).
+    
+    Args:
+        nratendimento: ID do atendimento
+        limit: Máximo de registros retornados (default: 10)
+        
+    Returns:
+        Tuple com (total, assessments) onde assessments é lista em ordem cronológica inversa
+    """
+    total = (
+        db.session.query(NutritionalAssessment)
+        .filter(NutritionalAssessment.nratendimento == nratendimento)
+        .count()
+    )
+    
+    assessments = (
+        db.session.query(NutritionalAssessment)
+        .filter(NutritionalAssessment.nratendimento == nratendimento)
+        .order_by(NutritionalAssessment.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    
+    return total, assessments
+
+
+def get_active_d7(nratendimento: int):
+    """Retorna o D7 ativo (não concluído) para um paciente.
+    
+    Args:
+        nratendimento: ID do atendimento
+        
+    Returns:
+        NutritionalD7 object ou None
+    """
+    return (
+        db.session.query(NutritionalD7)
+        .filter(NutritionalD7.nratendimento == nratendimento)
+        .filter(NutritionalD7.concluido.is_(False) | NutritionalD7.concluido.is_(None))
+        .order_by(NutritionalD7.created_at.desc())
+        .first()
+    )
+
+
+def close_d7(d7_id: int):
+    """Encerra um D7 ativo (seta concluido=True).
+    
+    Args:
+        d7_id: ID do D7 a encerrar
+    """
+    from datetime import datetime
+    
+    d7 = db.session.query(NutritionalD7).filter(NutritionalD7.id == d7_id).first()
+    
+    if d7:
+        d7.concluido = True
+        d7.updated_at = datetime.now()
+        db.session.flush()
+        return d7
+    
+    return None
+
+
+def create_d7(nratendimento: int, dt_prevista, idusuario: int = None):
+    """Cria um novo D7.
+    
+    Args:
+        nratendimento: ID do atendimento
+        dt_prevista: Data prevista para o D7
+        idusuario: ID do usuário que criou (opcional)
+        
+    Returns:
+        NutritionalD7 object criado
+    """
+    from datetime import datetime
+    
+    d7 = NutritionalD7(
+        nratendimento=nratendimento,
+        dt_prevista=dt_prevista,
+        concluido=False,
+        idusuario=idusuario,
+        created_at=datetime.now()
+    )
+    
+    db.session.add(d7)
+    db.session.flush()
+    
+    return d7

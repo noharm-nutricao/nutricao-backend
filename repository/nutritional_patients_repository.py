@@ -9,6 +9,7 @@ from models.nutritional import (
     NutritionalScreening,
     NutritionalD7,
     NutritionalGlim,
+    NutritionalAssessment,
 )
 from models.prescription import Patient
 from models.segment import Segment
@@ -25,8 +26,8 @@ def get_patients(setor=None, ala=None):
 
     # haval
     haval_subq = (
-        db.session.query(func.max(NutritionalScreening.created_at))
-        .filter(NutritionalScreening.nratendimento == Patient.admissionNumber)
+        db.session.query(func.max(NutritionalAssessment.created_at))
+        .filter(NutritionalAssessment.nratendimento == Patient.admissionNumber)
         .correlate(Patient)
         .scalar_subquery()
     )

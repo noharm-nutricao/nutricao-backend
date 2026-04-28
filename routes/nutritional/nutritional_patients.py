@@ -78,3 +78,29 @@ def create_assessment(nratendimento: int, user_context):
         data=payload,
         idusuario=user_context.id
     )
+
+
+@app_nutritional.route(
+    "/nutritional/patients/<int:nratendimento>/avaliacoes",
+    methods=["GET"]
+)
+@api_endpoint()
+def list_assessments(nratendimento: int):
+    limit = request.args.get("limit", 10, type=int)
+    
+    return nutritional_patient_service.get_assessments(
+        nratendimento=nratendimento,
+        limit=limit
+    )
+
+
+@app_nutritional.route(
+    "/nutritional/d7/<int:d7_id>/encerrar",
+    methods=["PUT"]
+)
+@api_endpoint()
+def close_d7_endpoint(d7_id: int, user_context):
+    return nutritional_patient_service.close_and_create_d7(
+        d7_id=d7_id,
+        idusuario=user_context.id
+    )
