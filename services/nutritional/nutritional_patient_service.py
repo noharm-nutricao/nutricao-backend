@@ -2,6 +2,7 @@ from decorators.has_permission_decorator import has_permission
 from datetime import datetime
 from types import SimpleNamespace
 
+from models.prescription import Patient
 from repository.nutritional import nutritional_repository
 from security.permission import Permission
 import logging
@@ -27,21 +28,18 @@ def save_manual_mnutric(admission_number: int, mnutric: dict):
         mnutric=mnutric,
     )
 
-def calculate_mnutric(patient, apache, sofa) -> dict:
+def calculate_mnutric(patient: Patient, apache, sofa) -> dict:
     """Calcula e persiste mNUTRIC a partir de entrada manual (PUT /mnutric-manual).
 
     apache e sofa são os valores brutos informados pelo nutricionista.
     Seta mn_apache_manual=True e mn_sofa_manual=True via save_manual_mnutric.
     """
-    today        = datetime.now()
-    uti_days     = (today.date() - patient.utiEntryDate.date()).days
-
     mnutric_age       = _mnutric_age(patient.birthdate)
     mnutric_apache    = _mnutric_apache_ii(apache)
     mnutric_sofa      = _mnutric_sofa(sofa)
     mnutric_comorbity = _mnutric_comorbity(patient.id_icd)
-    mnutric_days_uti  = _mnutric_days_uti(uti_days)
-    mnutric           = mnutric_age + mnutric_apache + mnutric_sofa + mnutric_comorbity + mnutric_days_uti
+    mnutric_days_before_icu  = _mnutric_days_before_icu(patient)
+    mnutric           = mnutric_age + mnutric_apache + mnutric_sofa + mnutric_comorbity + mnutric_days_before_icu
 
     result = {
         "total"            : mnutric,
@@ -49,7 +47,7 @@ def calculate_mnutric(patient, apache, sofa) -> dict:
         "apache"           : mnutric_apache,
         "sofa"             : mnutric_sofa,
         "comorbity"        : mnutric_comorbity,
-        "daysUTI"          : mnutric_days_uti,
+        "daysUTI"          : mnutric_days_before_icu,
         "classify"         : _mnutric_clasify(mnutric),
         "dados_incompletos": False,
     }
@@ -102,11 +100,10 @@ def _mnutric_comorbity(comorbity) -> int:
         mnutric_comorbity = 1
     return mnutric_comorbity
 
-def _mnutric_days_uti(days_uti) -> int:
-    mnutric_days_uti = 0
-    if days_uti > 1:
-        mnutric_days_uti = 1
-    return mnutric_days_uti
+def _mnutric_days_before_icu(patient: Patient) -> int:
+    entry_date = patient.lastTransferDate or patient.admissionDate
+    dias_antes_uti = (entry_date.date() - patient.admissionDate.date()).days
+    return 1 if dias_antes_uti >= 2 else 0
 
 def _mnutric_clasify(mnutric: int) -> str:
     if mnutric >= 0 and mnutric <= 2:
@@ -142,7 +139,7 @@ def recalculate_mnutric(patient):
         admissionNumber=admission_number,
         birthdate=birthdate,
         admissionDate=admission_date,
-        utiEntryDate=getattr(patient, "dt_ultima_transferencia", None) or admission_date,
+        utiEntryDate=getattr(patient, "lastTransferDate", None) or admission_date,
         id_icd=getattr(patient, "idcid", None) or '',
     )
 
@@ -163,7 +160,7 @@ def recalculate_mnutric(patient):
         "apache":       _mnutric_apache_ii(apache) if apache is not None else None,
         "sofa":         _mnutric_sofa(sofa) if sofa is not None else None,
         "comorbity":    _mnutric_comorbity(normalized.id_icd),
-        "daysUTI":      _mnutric_days_uti(uti_days),
+        "daysUTI":      _mnutric_days_before_icu(patient),
         "dados_incompletos": dados_incompletos,
         "total":        None,
         "classify":     None,
