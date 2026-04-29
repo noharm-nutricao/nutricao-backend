@@ -396,5 +396,14 @@ def get_alertas(nratendimento: int):
         .all()
     )
 
+def get_alerta(nratendimento: int, alerta_id: int):
+    from models.nutritional import NutritionalAlert
 
-
+    return (
+        db.session.query(NutritionalAlert)
+        .filter(
+            NutritionalAlert.nratendimento == nratendimento,
+            NutritionalAlert.id == alerta_id,
+        )
+        .first()
+    )
