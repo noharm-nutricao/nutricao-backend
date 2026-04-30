@@ -28,7 +28,7 @@ def save_manual_mnutric(admission_number: int, mnutric: dict):
         mnutric=mnutric,
     )
 
-def calculate_mnutric(patient: Patient, apache, sofa) -> dict:
+def calculate_mnutric(patient, apache, sofa) -> dict:
     """Calcula e persiste mNUTRIC a partir de entrada manual (PUT /mnutric-manual).
 
     apache e sofa são os valores brutos informados pelo nutricionista.
@@ -38,8 +38,8 @@ def calculate_mnutric(patient: Patient, apache, sofa) -> dict:
     mnutric_apache    = _mnutric_apache_ii(apache)
     mnutric_sofa      = _mnutric_sofa(sofa)
     mnutric_comorbity = _mnutric_comorbity(patient.id_icd)
-    mnutric_days_before_icu  = _mnutric_days_before_icu(patient)
-    mnutric           = mnutric_age + mnutric_apache + mnutric_sofa + mnutric_comorbity + mnutric_days_before_icu
+    mnutric_days_uti  = _mnutric_days_before_icu(patient)
+    mnutric           = mnutric_age + mnutric_apache + mnutric_sofa + mnutric_comorbity + mnutric_days_uti
 
     result = {
         "total"            : mnutric,
@@ -47,7 +47,7 @@ def calculate_mnutric(patient: Patient, apache, sofa) -> dict:
         "apache"           : mnutric_apache,
         "sofa"             : mnutric_sofa,
         "comorbity"        : mnutric_comorbity,
-        "daysUTI"          : mnutric_days_before_icu,
+        "daysUTI"          : mnutric_days_uti,
         "classify"         : _mnutric_clasify(mnutric),
         "dados_incompletos": False,
     }
@@ -101,8 +101,15 @@ def _mnutric_comorbity(comorbity) -> int:
     return mnutric_comorbity
 
 def _mnutric_days_before_icu(patient: Patient) -> int:
-    entry_date = patient.lastTransferDate or patient.admissionDate
-    dias_antes_uti = (entry_date.date() - patient.admissionDate.date()).days
+    admission_date = getattr(patient, "admissionDate", None) or getattr(patient, "dtinternacao", None)
+    entry_date = (
+        getattr(patient, "lastTransferDate", None)
+        or getattr(patient, "dt_ultima_transferencia", None)
+        or admission_date
+    )
+    if admission_date is None or entry_date is None:
+        return 0
+    dias_antes_uti = (entry_date.date() - admission_date.date()).days
     return 1 if dias_antes_uti >= 2 else 0
 
 def _mnutric_clasify(mnutric: int) -> str:
@@ -160,7 +167,7 @@ def recalculate_mnutric(patient):
         "apache":       _mnutric_apache_ii(apache) if apache is not None else None,
         "sofa":         _mnutric_sofa(sofa) if sofa is not None else None,
         "comorbity":    _mnutric_comorbity(normalized.id_icd),
-        "daysUTI":      _mnutric_days_before_icu(patient),
+        "daysUTI":      _mnutric_days_before_icu(normalized),
         "dados_incompletos": dados_incompletos,
         "total":        None,
         "classify":     None,

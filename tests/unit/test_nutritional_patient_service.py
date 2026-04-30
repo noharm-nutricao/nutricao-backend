@@ -42,6 +42,24 @@ def _patient(
     )
 
 
+def _legacy_patient(
+    age,
+    idcid,
+    admission_days_ago,
+    last_transfer_days_after_admission=0,
+    admission_number=None,
+):
+    admission_date = FIXED_NOW - timedelta(days=admission_days_ago)
+    last_transfer_date = admission_date + timedelta(days=last_transfer_days_after_admission)
+    return SimpleNamespace(
+        nratendimento=admission_number,
+        dtnascimento=real_datetime(FIXED_NOW.year - age, 4, 1),
+        idcid=idcid,
+        dtinternacao=admission_date,
+        dt_ultima_transferencia=last_transfer_date,
+    )
+
+
 @pytest.mark.parametrize(
     (
         "age",
@@ -149,7 +167,6 @@ def test_calculate_mnutric_returns_expected_scores(
     )
 
     result = service.calculate_mnutric(patient, apache=apache, sofa=sofa)
-
     assert result == expected
 
 
@@ -190,6 +207,61 @@ def test_calculate_mnutric_returns_result_when_persist_fails():
     assert log_error.call_count == 1
     assert result["total"] == 3
     assert result["classify"] == "md"
+
+
+@pytest.mark.parametrize(
+    "patient, expected",
+    [
+        pytest.param(
+            _patient(
+                age=40,
+                id_icd=ICD_WITHOUT_COMORBITY,
+                admission_days_ago=3,
+                last_transfer_days_after_admission=2,
+            ),
+            1,
+            id="normalized-uti-after-2-days",
+        ),
+        pytest.param(
+            _patient(
+                age=40,
+                id_icd=ICD_WITHOUT_COMORBITY,
+                admission_days_ago=3,
+                last_transfer_days_after_admission=1,
+            ),
+            0,
+            id="normalized-uti-before-2-days",
+        ),
+        pytest.param(
+            _legacy_patient(
+                age=40,
+                idcid=ICD_WITHOUT_COMORBITY,
+                admission_days_ago=3,
+                last_transfer_days_after_admission=2,
+            ),
+            1,
+            id="legacy-uti-after-2-days",
+        ),
+        pytest.param(
+            SimpleNamespace(
+                admissionDate=FIXED_NOW - timedelta(days=2),
+                lastTransferDate=None,
+            ),
+            0,
+            id="missing-transfer-date",
+        ),
+        pytest.param(
+            SimpleNamespace(
+                admissionDate=None,
+                lastTransferDate=FIXED_NOW - timedelta(days=1),
+            ),
+            0,
+            id="missing-admission-date",
+        ),
+    ],
+)
+def test_mnutric_days_before_icu_handles_normalized_and_legacy(patient, expected):
+    assert service._mnutric_days_before_icu(patient) == expected
 
 
 def test_recalculate_mnutric_restores_dimension_scores_and_normalizes_patient():
