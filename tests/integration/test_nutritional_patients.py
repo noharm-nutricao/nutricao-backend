@@ -75,43 +75,53 @@ def _ensure_schema():
 
     ddl_statements = [
         """CREATE TABLE IF NOT EXISTS demo.nutricional_avaliacao (
-            idnutricional_avaliacao BIGSERIAL PRIMARY KEY,
+            id BIGSERIAL PRIMARY KEY,
             nratendimento BIGINT NOT NULL,
+            idusuario BIGINT,
             conduta TEXT,
-            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-            created_by BIGINT NOT NULL DEFAULT 1
+            frequencia VARCHAR(10),
+            ingestao SMALLINT,
+            meta_kcal SMALLINT,
+            meta_prot SMALLINT,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
         )""",
         """CREATE TABLE IF NOT EXISTS demo.nutricional_d7 (
-            idnutricional_d7 BIGSERIAL PRIMARY KEY,
+            id BIGSERIAL PRIMARY KEY,
             nratendimento BIGINT NOT NULL,
             concluido BOOLEAN NOT NULL DEFAULT FALSE,
             dt_prevista TIMESTAMP NOT NULL,
             created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-            created_by BIGINT NOT NULL DEFAULT 1
+            updated_at TIMESTAMP,
+            idusuario BIGINT
         )""",
         """CREATE TABLE IF NOT EXISTS demo.nutricional_triagem (
-            idnutricional_triagem BIGSERIAL PRIMARY KEY,
+            id BIGSERIAL PRIMARY KEY,
             nratendimento BIGINT NOT NULL,
+            protocolo VARCHAR(10) NOT NULL DEFAULT 'NRS2002',
             classificacao TEXT,
-            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-            created_by BIGINT NOT NULL DEFAULT 1
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
         )""",
         """CREATE TABLE IF NOT EXISTS demo.nutricional_glim (
-            idnutricional_glim BIGSERIAL PRIMARY KEY,
+            id BIGSERIAL PRIMARY KEY,
             nratendimento BIGINT NOT NULL,
             diagnostico TEXT,
             fenotipos TEXT[],
-            etiologicos TEXT[],
+            etiologias TEXT[],
+            idusuario BIGINT,
             created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-            created_by BIGINT NOT NULL DEFAULT 1
+            updated_at TIMESTAMP
         )""",
         """CREATE TABLE IF NOT EXISTS demo.nutricional_alerta (
-            idnutricional_alerta BIGSERIAL PRIMARY KEY,
+            id BIGSERIAL PRIMARY KEY,
             nratendimento BIGINT NOT NULL,
-            alerta TEXT NOT NULL,
+            tipo TEXT,
+            descricao TEXT,
+            severidade TEXT,
             ativo BOOLEAN NOT NULL DEFAULT TRUE,
             created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-            created_by BIGINT NOT NULL DEFAULT 1
+            reconhecido BOOLEAN DEFAULT FALSE,
+            reconhecido_por BIGINT NOT NULL DEFAULT 1,
+            reconhecido_at TIMESTAMP
         )""",
     ]
 
@@ -230,7 +240,7 @@ def _seed():
     session.execute(
         text(
             "INSERT INTO demo.nutricional_avaliacao "
-            "(nratendimento, conduta, created_at, created_by) "
+            "(nratendimento, conduta, created_at, idusuario) "
             "VALUES (:adm, 'Dieta hipercalorica', NOW() - INTERVAL '3 hours', 1)"
         ),
         {"adm": _ADM_ACTIVE_UTI},
@@ -238,7 +248,7 @@ def _seed():
     session.execute(
         text(
             "INSERT INTO demo.nutricional_d7 "
-            "(nratendimento, concluido, dt_prevista, created_at, created_by) "
+            "(nratendimento, concluido, dt_prevista, created_at, idusuario) "
             "VALUES (:adm, false, NOW() + INTERVAL '24 hours', NOW(), 1)"
         ),
         {"adm": _ADM_ACTIVE_UTI},
@@ -246,15 +256,15 @@ def _seed():
     session.execute(
         text(
             "INSERT INTO demo.nutricional_triagem "
-            "(nratendimento, classificacao, created_at, created_by) "
-            "VALUES (:adm, 'al', NOW(), 1)"
+            "(nratendimento, protocolo, classificacao, created_at) "
+            "VALUES (:adm, 'MNUTRIC', 'al', NOW())"
         ),
         {"adm": _ADM_ACTIVE_UTI},
     )
     session.execute(
         text(
             "INSERT INTO demo.nutricional_glim "
-            "(nratendimento, diagnostico, fenotipos, etiologicos, created_at, created_by) "
+            "(nratendimento, diagnostico, fenotipos, etiologias, created_at, idusuario) "
             "VALUES (:adm, 'mod', ARRAY['perda_peso', 'baixo_imc'], ARRAY['inflamacao'], NOW(), 1)"
         ),
         {"adm": _ADM_ACTIVE_UTI},
@@ -730,4 +740,3 @@ def test_filter_ala_case_insensitive(client, analyst_headers):
     ids_upper = sorted([p["id"] for p in data_upper])
     ids_lower = sorted([p["id"] for p in data_lower])
     assert ids_upper == ids_lower
-

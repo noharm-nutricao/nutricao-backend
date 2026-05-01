@@ -85,7 +85,7 @@ def test_d7_to_dict_contains_required_fields():
     assert "dt_prevista" in result
     assert "concluido" in result
     assert "status" in result
-    # assert "updated_at" in result
+    assert "updated_at" in result
 
 
 def test_d7_to_dict_status_is_string():
@@ -94,18 +94,28 @@ def test_d7_to_dict_status_is_string():
     assert isinstance(result["status"], str)
 
 
-# def test_d7_to_dict_updated_at_none_when_not_set():
-#     d7 = _make_d7()
-#     d7.updated_at = None
-#     result = service._d7_to_dict(d7)
-#     assert result["updated_at"] is None
+def test_d7_to_dict_updated_at_none_when_not_set():
+    d7 = _make_d7()
+    d7.updated_at = None
+    result = service._d7_to_dict(d7)
+    assert result["updated_at"] is None
 
 
-# def test_d7_to_dict_updated_at_iso_when_set():
-#     d7 = _make_d7()
-#     d7.updated_at = datetime(2026, 4, 26, 9, 0, 0)
-#     result = service._d7_to_dict(d7)
-#     assert result["updated_at"] == "2026-04-26T09:00:00"
+def test_d7_to_dict_updated_at_iso_when_set():
+    d7 = _make_d7()
+    d7.updated_at = datetime(2026, 4, 26, 9, 0, 0)
+    result = service._d7_to_dict(d7)
+    assert result["updated_at"] == "2026-04-26T09:00:00Z"
+
+
+def test_d7_to_dict_normalizes_dt_prevista_to_utc():
+    d7 = _make_d7(
+        dt_prevista=datetime(
+            2026, 5, 7, 23, 40, 20, tzinfo=timezone(timedelta(hours=-3))
+        )
+    )
+    result = service._d7_to_dict(d7)
+    assert result["dt_prevista"] == "2026-05-08T02:40:20Z"
 
 
 # --- create_d7 ----------------------------------------------------------
@@ -192,7 +202,7 @@ def test_close_d7_returns_dict_with_concluido_true():
 
     assert result["concluido"] is True
     assert result["status"] == "concluido"
-    # assert result["updated_at"] is not None
+    assert result["updated_at"] is not None
 
 
 def test_close_d7_calls_repository_with_correct_args():

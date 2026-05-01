@@ -196,8 +196,8 @@ def upsert_d7(nratendimento: int, idusuario: int) -> NutritionalD7:
         d7.idusuario = idusuario
         d7.created_at = now
         db.session.add(d7)
-    # else:
-    #     d7.updated_at = now
+    else:
+        d7.updated_at = now
 
     d7.dt_prevista = dt_prevista
     d7.concluido = False
@@ -224,7 +224,7 @@ def close_d7(id: int, nratendimento: int) -> NutritionalD7:
         )
 
     d7.concluido = True
-    # d7.updated_at = now_sp()
+    d7.updated_at = now_sp()
 
     db.session.flush()
     return d7

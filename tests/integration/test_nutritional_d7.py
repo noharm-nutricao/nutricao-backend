@@ -284,7 +284,7 @@ def test_put_encerrar_marks_d7_as_concluded(client, analyst_headers):
     data = response.get_json()["data"]
     assert data["concluido"] is True
     assert data["status"] == "concluido"
-    # assert data["updated_at"] is not None
+    assert data["updated_at"] is not None
 
 
 def test_put_encerrar_persists_in_db(client, analyst_headers):
@@ -298,7 +298,7 @@ def test_put_encerrar_persists_in_db(client, analyst_headers):
     session.expire_all()
     row = _get_d7_row()
     assert row.concluido is True
-    # assert row.updated_at is not None
+    assert row.updated_at is not None
 
 
 def test_put_encerrar_response_structure(client, analyst_headers):
@@ -313,7 +313,7 @@ def test_put_encerrar_response_structure(client, analyst_headers):
     assert "id" in data
     assert "concluido" in data
     assert "status" in data
-    # assert "updated_at" in data
+    assert "updated_at" in data
 
 
 # ---------------------------------------------------------------------------
@@ -400,20 +400,20 @@ def test_put_encerrar_wrong_nratendimento_returns_404(client, analyst_headers):
     assert response.status_code == 404
 
 
-# def test_post_d7_upsert_sets_updated_at(client, analyst_headers):
-#     """POST /d7 em upsert (segundo POST) deve setar updated_at no registro"""
-#     _cleanup_d7()
-#
-#     client.post(_POST_ENDPOINT, headers=analyst_headers)
-#     session.expire_all()
-#     row_first = _get_d7_row()
-#     assert row_first.updated_at is None
-#
-#     client.post(_POST_ENDPOINT, headers=analyst_headers)
-#     session.expire_all()
-#     row_second = _get_d7_row()
-#
-#     assert row_second.updated_at is not None
+def test_post_d7_upsert_sets_updated_at(client, analyst_headers):
+    """POST /d7 em upsert (segundo POST) deve setar updated_at no registro"""
+    _cleanup_d7()
+
+    client.post(_POST_ENDPOINT, headers=analyst_headers)
+    session.expire_all()
+    row_first = _get_d7_row()
+    assert row_first.updated_at is None
+
+    client.post(_POST_ENDPOINT, headers=analyst_headers)
+    session.expire_all()
+    row_second = _get_d7_row()
+
+    assert row_second.updated_at is not None
 
 
 def test_get_d7_status_vencendo_via_db(client, analyst_headers):

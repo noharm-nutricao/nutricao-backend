@@ -233,13 +233,23 @@ def _calculate_status(d7: NutritionalD7) -> str:
     return "vencido"
 
 
+def _datetime_to_utc_iso(value: datetime) -> str | None:
+    if value is None:
+        return None
+
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
 def _d7_to_dict(d7: NutritionalD7) -> dict:
     return {
         "id": d7.id,
-        "dt_prevista": d7.dt_prevista.isoformat() if d7.dt_prevista else None,
+        "dt_prevista": _datetime_to_utc_iso(d7.dt_prevista),
         "concluido": d7.concluido,
         "status": _calculate_status(d7),
-        # "updated_at": d7.updated_at.isoformat() if d7.updated_at else None,
+        "updated_at": _datetime_to_utc_iso(d7.updated_at),
     }
 
 
