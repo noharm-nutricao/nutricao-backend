@@ -104,6 +104,7 @@ def _mnutric_days_before_icu(patient: Patient) -> int:
     admission_date = getattr(patient, "admissionDate", None) or getattr(patient, "dtinternacao", None)
     entry_date = (
         getattr(patient, "lastTransferDate", None)
+        or getattr(patient, "utiEntryDate", None)
         or getattr(patient, "dt_ultima_transferencia", None)
         or admission_date
     )
