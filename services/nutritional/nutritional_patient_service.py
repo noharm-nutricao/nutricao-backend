@@ -159,10 +159,6 @@ def recalculate_mnutric(patient):
     apache = _restore_apache_ii_from_dimension(getattr(screening, "mn_apache", None)) if apache_manual else None
     sofa = _restore_sofa_from_dimension(getattr(screening, "mn_sofa", None)) if sofa_manual else None
 
-    today = datetime.now()
-    uti_entry = normalized.utiEntryDate
-    uti_days = (today.date() - uti_entry.date()).days if uti_entry else 0
-
     result = {
         "age":          _mnutric_age(normalized.birthdate),
         "apache":       _mnutric_apache_ii(apache) if apache is not None else None,
