@@ -56,16 +56,15 @@ def get_patients(setor=None, ala=None):
         db.session.query(
             NutritionalAssessment.nratendimento,
             NutritionalAssessment.frequencia,
-            func.max(NutritionalAssessment.created_at),
         )
         .distinct(NutritionalAssessment.nratendimento)
-        .group_by(
+        .order_by(
             NutritionalAssessment.nratendimento,
-            NutritionalAssessment.frequencia,
+            NutritionalAssessment.created_at.desc(),
+            NutritionalAssessment.id.desc(),
         )
         .subquery("last_assessment")
     )
-    
     # sev
     sev_subq = (
         db.session.query(NutritionalScreening.classificacao)
