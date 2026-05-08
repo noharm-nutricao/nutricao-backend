@@ -312,6 +312,22 @@ def _find_patient(data, admission_number):
     return None
 
 
+def _assessment_payload(
+    prox_visita="24h",
+    conduta="Nova conduta nutricional",
+    ingestao=80,
+    meta_kcal=2200,
+    meta_prot=120,
+):
+    return {
+        "conduta": conduta,
+        "prox_visita": prox_visita,
+        "ingestao": ingestao,
+        "meta_kcal": meta_kcal,
+        "meta_prot": meta_prot,
+    }
+
+
 def test_get_nutritional_patients_200(client, analyst_headers):
     response = client.get(ENDPOINT, headers=analyst_headers)
 
@@ -731,3 +747,441 @@ def test_filter_ala_case_insensitive(client, analyst_headers):
     ids_lower = sorted([p["id"] for p in data_lower])
     assert ids_upper == ids_lower
 
+
+def test_create_assessment_200(client, analyst_headers):
+    payload = _assessment_payload()
+
+    response = client.post(
+        f"{ENDPOINT}/{_ADM_ACTIVE_UTI}/avaliacoes",
+        json=payload,
+        headers=analyst_headers,
+    )
+
+    assert response.status_code == 200
+
+    body = response.get_json()
+
+    assert body["status"] == "success"
+
+    data = body["data"]
+
+    assert data["id"] is not None
+    assert data["conduta"] == payload["conduta"]
+    assert data["prox_visita"] == payload["prox_visita"]
+    assert data["ingestao"] == payload["ingestao"]
+    assert data["meta_kcal"] == payload["meta_kcal"]
+    assert data["meta_prot"] == payload["meta_prot"]
+    assert data["created_at"] is not None
+
+
+def test_create_assessment_persists_database(client, analyst_headers):
+    payload = _assessment_payload(
+        conduta="Persistencia banco"
+    )
+
+    response = client.post(
+        f"{ENDPOINT}/{_ADM_ACTIVE_UTI}/avaliacoes",
+        json=payload,
+        headers=analyst_headers,
+    )
+
+    assert response.status_code == 200
+
+    created = session.execute(
+        text(
+            """
+            SELECT
+                conduta,
+                frequencia,
+                ingestao,
+                meta_kcal,
+                meta_prot
+            FROM demo.nutricional_avaliacao
+            WHERE nratendimento = :adm
+            ORDER BY created_at DESC
+            LIMIT 1
+            """
+        ),
+        {"adm": _ADM_ACTIVE_UTI},
+    ).fetchone()
+
+    assert created is not None
+    assert created.conduta == payload["conduta"]
+    assert created.frequencia == payload["prox_visita"]
+    assert created.ingestao == payload["ingestao"]
+    assert created.meta_kcal == payload["meta_kcal"]
+    assert created.meta_prot == payload["meta_prot"]
+
+
+def test_create_assessment_404_patient_not_found(client, analyst_headers):
+    response = client.post(
+        f"{ENDPOINT}/999999999/avaliacoes",
+        json=_assessment_payload(),
+        headers=analyst_headers,
+    )
+
+    assert response.status_code == 404
+
+    body = response.get_json()
+
+    assert body["status"] == "error"
+    assert body["message"] == "Paciente não encontrado"
+    assert body["code"] == "errors.notFound"
+
+
+def test_create_assessment_invalid_empty_conduta(client, analyst_headers):
+    payload = _assessment_payload(conduta="   ")
+
+    response = client.post(
+        f"{ENDPOINT}/{_ADM_ACTIVE_UTI}/avaliacoes",
+        json=payload,
+        headers=analyst_headers,
+    )
+
+    assert response.status_code == 400
+
+    body = response.get_json()
+
+    assert body["status"] == "error"
+    assert body["message"] == "Parâmetros inválidos"
+
+    validations = body["validations"]
+
+    assert any(
+        v["loc"][-1] == "conduta"
+        for v in validations
+    )
+
+
+def test_create_assessment_invalid_prox_visita(client, analyst_headers):
+    payload = _assessment_payload(prox_visita="mensal")
+
+    response = client.post(
+        f"{ENDPOINT}/{_ADM_ACTIVE_UTI}/avaliacoes",
+        json=payload,
+        headers=analyst_headers,
+    )
+
+    assert response.status_code == 400
+
+    body = response.get_json()
+
+    validations = body["validations"]
+
+    assert any(
+        v["loc"][-1] == "prox_visita"
+        for v in validations
+    )
+
+
+def test_create_assessment_invalid_ingestao_above_100(client, analyst_headers):
+    payload = _assessment_payload(ingestao=150)
+
+    response = client.post(
+        f"{ENDPOINT}/{_ADM_ACTIVE_UTI}/avaliacoes",
+        json=payload,
+        headers=analyst_headers,
+    )
+
+    assert response.status_code == 400
+
+    body = response.get_json()
+
+    validations = body["validations"]
+
+    assert any(
+        v["loc"][-1] == "ingestao"
+        for v in validations
+    )
+
+
+def test_create_assessment_invalid_ingestao_below_zero(client, analyst_headers):
+    payload = _assessment_payload(ingestao=-1)
+
+    response = client.post(
+        f"{ENDPOINT}/{_ADM_ACTIVE_UTI}/avaliacoes",
+        json=payload,
+        headers=analyst_headers,
+    )
+
+    assert response.status_code == 400
+
+
+def test_create_assessment_accepts_nullable_fields(client, analyst_headers):
+    payload = {
+        "conduta": "Conduta minima",
+        "prox_visita": "24h",
+        "ingestao": None,
+        "meta_kcal": None,
+        "meta_prot": None,
+    }
+
+    response = client.post(
+        f"{ENDPOINT}/{_ADM_ACTIVE_ENF}/avaliacoes",
+        json=payload,
+        headers=analyst_headers,
+    )
+
+    assert response.status_code == 200
+
+    data = response.get_json()["data"]
+
+    assert data["ingestao"] is None
+    assert data["meta_kcal"] is None
+    assert data["meta_prot"] is None
+
+
+def test_create_assessment_creates_new_d7(client, analyst_headers):
+    payload = _assessment_payload(prox_visita="D7")
+
+    before = session.execute(
+        text(
+            """
+            SELECT COUNT(*)
+            FROM demo.nutricional_d7
+            WHERE nratendimento = :adm
+            """
+        ),
+        {"adm": _ADM_ACTIVE_ENF},
+    ).scalar()
+
+    response = client.post(
+        f"{ENDPOINT}/{_ADM_ACTIVE_ENF}/avaliacoes",
+        json=payload,
+        headers=analyst_headers,
+    )
+
+    assert response.status_code == 200
+
+    after = session.execute(
+        text(
+            """
+            SELECT COUNT(*)
+            FROM demo.nutricional_d7
+            WHERE nratendimento = :adm
+            """
+        ),
+        {"adm": _ADM_ACTIVE_ENF},
+    ).scalar()
+
+    assert after == before + 1
+
+
+def test_create_assessment_closes_previous_active_d7(client, analyst_headers):
+    session.execute(
+        text(
+            """
+            INSERT INTO demo.nutricional_d7
+            (
+                nratendimento,
+                concluido,
+                dt_prevista,
+                created_at,
+                idusuario
+            )
+            VALUES
+            (
+                :adm,
+                false,
+                NOW() + INTERVAL '7 days',
+                NOW(),
+                1
+            )
+            """
+        ),
+        {"adm": _ADM_ACTIVE_ENF},
+    )
+
+    session_commit()
+
+    payload = _assessment_payload(prox_visita="D7")
+
+    response = client.post(
+        f"{ENDPOINT}/{_ADM_ACTIVE_ENF}/avaliacoes",
+        json=payload,
+        headers=analyst_headers,
+    )
+
+    assert response.status_code == 200
+
+    active_count = session.execute(
+        text(
+            """
+            SELECT COUNT(*)
+            FROM demo.nutricional_d7
+            WHERE nratendimento = :adm
+            AND (concluido = false OR concluido IS NULL)
+            """
+        ),
+        {"adm": _ADM_ACTIVE_ENF},
+    ).scalar()
+
+    assert active_count == 1
+
+
+def test_create_assessment_d7_new_record_is_active(client, analyst_headers):
+    payload = _assessment_payload(prox_visita="D7")
+
+    response = client.post(
+        f"{ENDPOINT}/{_ADM_ACTIVE_UTI}/avaliacoes",
+        json=payload,
+        headers=analyst_headers,
+    )
+
+    assert response.status_code == 200
+
+    created_d7 = session.execute(
+        text(
+            """
+            SELECT concluido
+            FROM demo.nutricional_d7
+            WHERE nratendimento = :adm
+            ORDER BY created_at DESC
+            LIMIT 1
+            """
+        ),
+        {"adm": _ADM_ACTIVE_UTI},
+    ).fetchone()
+
+    assert created_d7 is not None
+    assert created_d7.concluido is False
+
+
+def test_create_assessment_response_structure(client, analyst_headers):
+    response = client.post(
+        f"{ENDPOINT}/{_ADM_ACTIVE_UTI}/avaliacoes",
+        json=_assessment_payload(),
+        headers=analyst_headers,
+    )
+
+    body = response.get_json()
+
+    assert set(body.keys()) == {"status", "data"}
+
+    data = body["data"]
+
+    expected_fields = {
+        "id",
+        "conduta",
+        "prox_visita",
+        "ingestao",
+        "meta_kcal",
+        "meta_prot",
+        "created_at",
+    }
+
+    assert set(data.keys()) == expected_fields
+
+
+def test_should_list_assessments_success(
+    client,
+    auth_headers,
+    nutritional_assessment_factory
+):
+    nratendimento = 123
+
+    nutritional_assessment_factory.create_batch(
+        3,
+        nratendimento=nratendimento
+    )
+
+    response = client.get(
+        f"/nutritional/patients/{nratendimento}/avaliacoes",
+        headers=auth_headers
+    )
+
+    assert response.status_code == 200
+
+    body = response.get_json()
+
+    assert "data" in body
+    assert "total" in body
+
+    assert body["total"] == 3
+    assert len(body["data"]) == 3
+
+    assessment = body["data"][0]
+
+    assert "id" in assessment
+    assert "conduta" in assessment
+    assert "prox_visita" in assessment
+    assert "ingestao" in assessment
+    assert "meta_kcal" in assessment
+    assert "meta_prot" in assessment
+    assert "created_at" in assessment
+
+
+def test_should_return_only_last_10_assessments(
+    client,
+    auth_headers,
+    nutritional_assessment_factory
+):
+    nratendimento = 123
+
+    nutritional_assessment_factory.create_batch(
+        15,
+        nratendimento=nratendimento
+    )
+
+    response = client.get(
+        f"/nutritional/patients/{nratendimento}/avaliacoes",
+        headers=auth_headers
+    )
+
+    assert response.status_code == 200
+
+    body = response.get_json()
+
+    assert body["total"] == 15
+    assert len(body["data"]) == 10
+
+
+def test_should_return_assessments_ordered_by_created_at_desc(
+    client,
+    auth_headers,
+    nutritional_assessment_factory,
+    db_session
+):
+    nratendimento = 123
+
+    older = nutritional_assessment_factory(
+        nratendimento=nratendimento
+    )
+
+    newer = nutritional_assessment_factory(
+        nratendimento=nratendimento
+    )
+
+    older.created_at = "2024-01-01T10:00:00"
+    newer.created_at = "2024-01-02T10:00:00"
+
+    db_session.commit()
+
+    response = client.get(
+        f"/nutritional/patients/{nratendimento}/avaliacoes",
+        headers=auth_headers
+    )
+
+    assert response.status_code == 200
+
+    body = response.get_json()
+
+    assert body["data"][0]["id"] == newer.id
+    assert body["data"][1]["id"] == older.id
+
+
+def test_should_return_empty_list_when_patient_has_no_assessments(
+    client,
+    auth_headers
+):
+    response = client.get(
+        "/nutritional/patients/999999/avaliacoes",
+        headers=auth_headers
+    )
+
+    assert response.status_code == 200
+
+    body = response.get_json()
+
+    assert body["total"] == 0
+    assert body["data"] == []
