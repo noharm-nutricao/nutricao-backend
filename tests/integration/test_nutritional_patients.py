@@ -1073,21 +1073,44 @@ def test_create_assessment_response_structure(client, analyst_headers):
     assert set(data.keys()) == expected_fields
 
 
-def test_should_list_assessments_success(
-    client,
-    auth_headers,
-    nutritional_assessment_factory
-):
-    nratendimento = 123
+_ADM_LIST_ASSESSMENTS = 900090
 
-    nutritional_assessment_factory.create_batch(
-        3,
-        nratendimento=nratendimento
+
+def _insert_assessment(nratendimento, conduta="Conduta teste", created_at=None):
+    """Insert a nutricional_avaliacao row and return its generated id."""
+    created_at_expr = f"'{created_at}'" if created_at else "NOW()"
+    row = session.execute(
+        text(
+            f"""
+            INSERT INTO demo.nutricional_avaliacao
+                (nratendimento, conduta, frequencia, ingestao, meta_kcal, meta_prot, created_at, idusuario)
+            VALUES
+                (:adm, :conduta, '24h', 80, 2000, 100, {created_at_expr}, 1)
+            RETURNING id
+            """
+        ),
+        {"adm": nratendimento, "conduta": conduta},
+    ).fetchone()
+    session_commit()
+    return row.id
+
+
+def _delete_assessments(nratendimento):
+    session.execute(
+        text("DELETE FROM demo.nutricional_avaliacao WHERE nratendimento = :adm"),
+        {"adm": nratendimento},
     )
+    session_commit()
+
+
+def test_should_list_assessments_success(client, analyst_headers):
+    _delete_assessments(_ADM_LIST_ASSESSMENTS)
+    for i in range(3):
+        _insert_assessment(_ADM_LIST_ASSESSMENTS, conduta=f"Conduta {i}")
 
     response = client.get(
-        f"/nutritional/patients/{nratendimento}/avaliacoes",
-        headers=auth_headers
+        f"/nutritional/patients/{_ADM_LIST_ASSESSMENTS}/avaliacoes",
+        headers=analyst_headers,
     )
 
     assert response.status_code == 200
@@ -1096,87 +1119,70 @@ def test_should_list_assessments_success(
 
     assert "data" in body
     assert "total" in body
-
     assert body["total"] == 3
     assert len(body["data"]) == 3
 
     assessment = body["data"][0]
+    for field in ("id", "conduta", "prox_visita", "ingestao", "meta_kcal", "meta_prot", "created_at"):
+        assert field in assessment
 
-    assert "id" in assessment
-    assert "conduta" in assessment
-    assert "prox_visita" in assessment
-    assert "ingestao" in assessment
-    assert "meta_kcal" in assessment
-    assert "meta_prot" in assessment
-    assert "created_at" in assessment
+    _delete_assessments(_ADM_LIST_ASSESSMENTS)
 
 
-def test_should_return_only_last_10_assessments(
-    client,
-    auth_headers,
-    nutritional_assessment_factory
-):
-    nratendimento = 123
-
-    nutritional_assessment_factory.create_batch(
-        15,
-        nratendimento=nratendimento
-    )
+def test_should_return_only_last_10_assessments(client, analyst_headers):
+    _delete_assessments(_ADM_LIST_ASSESSMENTS)
+    for i in range(15):
+        _insert_assessment(_ADM_LIST_ASSESSMENTS, conduta=f"Conduta {i}")
 
     response = client.get(
-        f"/nutritional/patients/{nratendimento}/avaliacoes",
-        headers=auth_headers
+        f"/nutritional/patients/{_ADM_LIST_ASSESSMENTS}/avaliacoes",
+        headers=analyst_headers,
     )
 
     assert response.status_code == 200
 
     body = response.get_json()
-
     assert body["total"] == 15
     assert len(body["data"]) == 10
 
+    _delete_assessments(_ADM_LIST_ASSESSMENTS)
 
-def test_should_return_assessments_ordered_by_created_at_desc(
-    client,
-    auth_headers,
-    nutritional_assessment_factory,
-    db_session
-):
-    nratendimento = 123
 
-    older = nutritional_assessment_factory(
-        nratendimento=nratendimento
+def test_should_return_assessments_ordered_by_created_at_desc(client, analyst_headers):
+    _delete_assessments(_ADM_LIST_ASSESSMENTS)
+    older_id = _insert_assessment(_ADM_LIST_ASSESSMENTS, conduta="Conduta antiga")
+    newer_id = _insert_assessment(_ADM_LIST_ASSESSMENTS, conduta="Conduta nova")
+
+    session.execute(
+        text("UPDATE demo.nutricional_avaliacao SET created_at = '2024-01-01 10:00:00' WHERE id = :id"),
+        {"id": older_id},
     )
-
-    newer = nutritional_assessment_factory(
-        nratendimento=nratendimento
+    session.execute(
+        text("UPDATE demo.nutricional_avaliacao SET created_at = '2024-01-02 10:00:00' WHERE id = :id"),
+        {"id": newer_id},
     )
-
-    older.created_at = "2024-01-01T10:00:00"
-    newer.created_at = "2024-01-02T10:00:00"
-
-    db_session.commit()
+    session_commit()
 
     response = client.get(
-        f"/nutritional/patients/{nratendimento}/avaliacoes",
-        headers=auth_headers
+        f"/nutritional/patients/{_ADM_LIST_ASSESSMENTS}/avaliacoes",
+        headers=analyst_headers,
     )
 
     assert response.status_code == 200
 
     body = response.get_json()
+    assert body["data"][0]["id"] == newer_id
+    assert body["data"][1]["id"] == older_id
 
-    assert body["data"][0]["id"] == newer.id
-    assert body["data"][1]["id"] == older.id
+    _delete_assessments(_ADM_LIST_ASSESSMENTS)
 
 
-def test_should_return_empty_list_when_patient_has_no_assessments(
-    client,
-    auth_headers
-):
+def test_should_return_empty_list_when_patient_has_no_assessments(client, analyst_headers):
+    _delete_assessments(_ADM_LIST_ASSESSMENTS)
+
     response = client.get(
-        "/nutritional/patients/999999/avaliacoes",
-        headers=auth_headers
+        f"/nutritional/patients/{_ADM_LIST_ASSESSMENTS}/avaliacoes",
+        headers=analyst_headers,
     )
 
     assert response.status_code == 200
