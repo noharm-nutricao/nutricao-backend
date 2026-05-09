@@ -15,7 +15,7 @@ _GET_ENDPOINT = f"/nutritional/patients/{_ADM}/d7"
 
 
 def _put_endpoint(id):
-    return f"/nutritional/patients/{_ADM}/d7/{id}/encerrar"
+    return f"/nutritional/patients/{_ADM}/d7/{id}/close"
 
 
 # ---------------------------------------------------------------------------
@@ -150,14 +150,14 @@ def test_post_d7_dt_prevista_is_7_days_ahead(client, analyst_headers):
     row = _get_d7_row()
     assert row is not None
 
-    from datetime import datetime, timedelta, timezone
-    now = datetime.now(timezone.utc)
+    from datetime import datetime, timedelta
+    now = datetime.now()
     expected_min = now + timedelta(days=6, hours=23)
     expected_max = now + timedelta(days=7, hours=1)
 
     dt = row.dt_prevista
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+    if dt.tzinfo is not None:
+        dt = dt.astimezone().replace(tzinfo=None)
 
     assert expected_min <= dt <= expected_max
 
@@ -243,7 +243,7 @@ def test_get_d7_status_is_valid_value(client, analyst_headers):
 
 
 def test_get_d7_does_not_return_concluded_d7(client, analyst_headers):
-    """GET /d7 - D7 encerrado não deve aparecer como ativo"""
+    """GET /d7 - D7 closed não deve aparecer como ativo"""
     _cleanup_d7()
     post_response = client.post(_POST_ENDPOINT, headers=analyst_headers)
     d7_id = post_response.get_json()["data"]["id"]
@@ -256,24 +256,24 @@ def test_get_d7_does_not_return_concluded_d7(client, analyst_headers):
 
 
 # ---------------------------------------------------------------------------
-# PUT /nutritional/patients/:nratendimento/d7/:id/encerrar
+# PUT /nutritional/patients/:nratendimento/d7/:id/close
 # ---------------------------------------------------------------------------
 
 
-def test_put_encerrar_requires_authorization(client):
-    """PUT /d7/:id/encerrar - sem token deve retornar 401"""
+def test_put_close_requires_authorization(client):
+    """PUT /d7/:id/close - sem token deve retornar 401"""
     response = client.put(_put_endpoint(1))
     assert response.status_code == 401
 
 
-def test_put_encerrar_returns_404_for_nonexistent_d7(client, analyst_headers):
-    """PUT /d7/:id/encerrar - id inexistente deve retornar 404"""
+def test_put_close_returns_404_for_nonexistent_d7(client, analyst_headers):
+    """PUT /d7/:id/close - id inexistente deve retornar 404"""
     response = client.put(_put_endpoint(999999), headers=analyst_headers)
     assert response.status_code == 404
 
 
-def test_put_encerrar_marks_d7_as_concluded(client, analyst_headers):
-    """PUT /d7/:id/encerrar - deve setar concluido=true e retornar 200"""
+def test_put_close_marks_d7_as_concluded(client, analyst_headers):
+    """PUT /d7/:id/close - deve setar concluido=true e retornar 200"""
     _cleanup_d7()
     post_response = client.post(_POST_ENDPOINT, headers=analyst_headers)
     d7_id = post_response.get_json()["data"]["id"]
@@ -287,8 +287,8 @@ def test_put_encerrar_marks_d7_as_concluded(client, analyst_headers):
     assert data["updated_at"] is not None
 
 
-def test_put_encerrar_persists_in_db(client, analyst_headers):
-    """PUT /d7/:id/encerrar - atualiza concluido e updated_at no banco"""
+def test_put_close_persists_in_db(client, analyst_headers):
+    """PUT /d7/:id/close - atualiza concluido e updated_at no banco"""
     _cleanup_d7()
     post_response = client.post(_POST_ENDPOINT, headers=analyst_headers)
     d7_id = post_response.get_json()["data"]["id"]
@@ -301,8 +301,8 @@ def test_put_encerrar_persists_in_db(client, analyst_headers):
     assert row.updated_at is not None
 
 
-def test_put_encerrar_response_structure(client, analyst_headers):
-    """PUT /d7/:id/encerrar - resposta deve conter id, concluido, status e updated_at"""
+def test_put_close_response_structure(client, analyst_headers):
+    """PUT /d7/:id/close - resposta deve conter id, concluido, status e updated_at"""
     _cleanup_d7()
     post_response = client.post(_POST_ENDPOINT, headers=analyst_headers)
     d7_id = post_response.get_json()["data"]["id"]
@@ -322,7 +322,7 @@ def test_put_encerrar_response_structure(client, analyst_headers):
 
 
 def test_full_d7_lifecycle(client, analyst_headers):
-    """Fluxo completo: POST cria, GET retorna ativo, PUT encerra, GET retorna null"""
+    """Fluxo completo: POST cria, GET retorna ativo, PUT close, GET retorna null"""
     _cleanup_d7()
 
     # POST
@@ -336,12 +336,12 @@ def test_full_d7_lifecycle(client, analyst_headers):
     assert get_resp.status_code == 200
     assert get_resp.get_json()["data"]["id"] == d7_id
 
-    # PUT encerrar
+    # PUT close
     put_resp = client.put(_put_endpoint(d7_id), headers=analyst_headers)
     assert put_resp.status_code == 200
     assert put_resp.get_json()["data"]["concluido"] is True
 
-    # GET → null (encerrado não é ativo)
+    # GET → null (closed não é ativo)
     get_after = client.get(_GET_ENDPOINT, headers=analyst_headers)
     assert get_after.status_code == 200
     assert get_after.get_json()["data"] is None
@@ -366,8 +366,8 @@ def test_post_d7_with_motivo_body_succeeds(client, analyst_headers):
     assert response.get_json()["status"] == "success"
 
 
-def test_post_d7_after_encerrar_creates_new_d7(client, analyst_headers):
-    """POST /d7 depois de encerrar deve criar novo D7 com id diferente"""
+def test_post_d7_after_close_creates_new_d7(client, analyst_headers):
+    """POST /d7 depois de close deve criar novo D7 com id diferente"""
     _cleanup_d7()
 
     post1 = client.post(_POST_ENDPOINT, headers=analyst_headers)
@@ -388,13 +388,13 @@ def test_post_d7_after_encerrar_creates_new_d7(client, analyst_headers):
     assert count == 2
 
 
-def test_put_encerrar_wrong_nratendimento_returns_404(client, analyst_headers):
-    """PUT /d7/:id/encerrar com nratendimento errado deve retornar 404"""
+def test_put_close_wrong_nratendimento_returns_404(client, analyst_headers):
+    """PUT /d7/:id/close com nratendimento errado deve retornar 404"""
     _cleanup_d7()
     post_response = client.post(_POST_ENDPOINT, headers=analyst_headers)
     d7_id = post_response.get_json()["data"]["id"]
 
-    wrong_url = f"/nutritional/patients/{_ADM_NOT_FOUND}/d7/{d7_id}/encerrar"
+    wrong_url = f"/nutritional/patients/{_ADM_NOT_FOUND}/d7/{d7_id}/close"
     response = client.put(wrong_url, headers=analyst_headers)
 
     assert response.status_code == 404
@@ -453,11 +453,9 @@ def test_get_d7_status_vencido_via_db(client, analyst_headers):
     assert response.status_code == 200
     assert response.get_json()["data"]["status"] == "vencido"
 
-
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
-
 
 def _cleanup_d7():
     session.execute(

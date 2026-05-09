@@ -15,7 +15,7 @@ def _make_d7(concluido=False, dt_prevista=None):
         id=1,
         nratendimento=1001,
         concluido=concluido,
-        dt_prevista=dt_prevista or datetime.now(timezone.utc) + timedelta(days=7),
+        dt_prevista=dt_prevista or datetime.now() + timedelta(days=7),
         created_at=datetime(2026, 4, 23, 10, 0, 0),
         updated_at=None,
     )
@@ -30,46 +30,46 @@ def test_status_concluido_when_flag_is_true():
 
 
 def test_status_pendente_when_more_than_48h_ahead():
-    now = datetime.now(timezone.utc)
+    now = datetime.now()
     d7 = _make_d7(dt_prevista=now + timedelta(hours=49))
     assert service._calculate_status(d7) == "pendente"
 
 
 def test_status_vencendo_when_less_than_48h_but_still_future():
-    now = datetime.now(timezone.utc)
+    now = datetime.now()
     d7 = _make_d7(dt_prevista=now + timedelta(hours=24))
     assert service._calculate_status(d7) == "vencendo"
 
 
 def test_status_vencendo_at_exactly_48h_boundary():
-    now = datetime.now(timezone.utc)
+    now = datetime.now()
     # exactly at the boundary (≤ 48h, > now) → vencendo
     d7 = _make_d7(dt_prevista=now + timedelta(hours=48))
     assert service._calculate_status(d7) == "vencendo"
 
 
 def test_status_vencido_when_past_due():
-    now = datetime.now(timezone.utc)
+    now = datetime.now()
     d7 = _make_d7(dt_prevista=now - timedelta(minutes=1))
     assert service._calculate_status(d7) == "vencido"
 
 
 def test_status_vencido_when_far_in_past():
-    now = datetime.now(timezone.utc)
+    now = datetime.now()
     d7 = _make_d7(dt_prevista=now - timedelta(days=3))
     assert service._calculate_status(d7) == "vencido"
 
 
 def test_status_concluido_takes_priority_over_vencido():
     """concluido=True overrides any date condition."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now()
     d7 = _make_d7(concluido=True, dt_prevista=now - timedelta(days=10))
     assert service._calculate_status(d7) == "concluido"
 
 
 def test_status_handles_naive_dt_prevista():
     """DB may return timezone-naive datetimes; comparison must not raise."""
-    naive_future = datetime.utcnow() + timedelta(days=7)
+    naive_future = datetime.now() + timedelta(days=7)
     d7 = _make_d7(dt_prevista=naive_future)
     result = service._calculate_status(d7)
     assert result in {"pendente", "vencendo", "vencido", "concluido"}
@@ -105,24 +105,24 @@ def test_d7_to_dict_updated_at_iso_when_set():
     d7 = _make_d7()
     d7.updated_at = datetime(2026, 4, 26, 9, 0, 0)
     result = service._d7_to_dict(d7)
-    assert result["updated_at"] == "2026-04-26T09:00:00Z"
+    assert result["updated_at"] == "2026-04-26T09:00:00"
 
 
-def test_d7_to_dict_normalizes_dt_prevista_to_utc():
+def test_d7_to_dict_preserves_aware_datetime_offset():
     d7 = _make_d7(
         dt_prevista=datetime(
             2026, 5, 7, 23, 40, 20, tzinfo=timezone(timedelta(hours=-3))
         )
     )
     result = service._d7_to_dict(d7)
-    assert result["dt_prevista"] == "2026-05-08T02:40:20Z"
+    assert result["dt_prevista"] == "2026-05-07T23:40:20-03:00"
 
 
 # --- create_d7 ----------------------------------------------------------
 
 
 def _fake_d7(concluido=False, days_ahead=7):
-    now = datetime.now(timezone.utc)
+    now = datetime.now()
     return SimpleNamespace(
         id=3,
         nratendimento=1001,

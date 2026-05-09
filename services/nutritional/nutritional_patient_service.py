@@ -1,12 +1,11 @@
 from decorators.has_permission_decorator import has_permission
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 
 from models.main import User
 from models.nutritional import NutritionalD7
 from repository.nutritional import nutritional_repository
 from security.permission import Permission
-from utils.dateutils import now_sp
 import logging
 
 @has_permission(Permission.READ_PRESCRIPTION)
@@ -220,11 +219,8 @@ def _calculate_status(d7: NutritionalD7) -> str:
     if d7.concluido:
         return "concluido"
 
-    now = now_sp()
     dt_prevista = d7.dt_prevista
-
-    if dt_prevista.tzinfo is None:
-        dt_prevista = dt_prevista.replace(tzinfo=timezone.utc)
+    now = datetime.now(dt_prevista.tzinfo) if dt_prevista.tzinfo else datetime.now()
 
     if dt_prevista > now + timedelta(hours=48):
         return "pendente"
@@ -233,23 +229,20 @@ def _calculate_status(d7: NutritionalD7) -> str:
     return "vencido"
 
 
-def _datetime_to_utc_iso(value: datetime) -> str | None:
+def _datetime_to_iso(value: datetime) -> str | None:
     if value is None:
         return None
 
-    if value.tzinfo is None:
-        value = value.replace(tzinfo=timezone.utc)
-
-    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    return value.isoformat()
 
 
 def _d7_to_dict(d7: NutritionalD7) -> dict:
     return {
         "id": d7.id,
-        "dt_prevista": _datetime_to_utc_iso(d7.dt_prevista),
+        "dt_prevista": _datetime_to_iso(d7.dt_prevista),
         "concluido": d7.concluido,
         "status": _calculate_status(d7),
-        "updated_at": _datetime_to_utc_iso(d7.updated_at),
+        "updated_at": _datetime_to_iso(d7.updated_at),
     }
 
 

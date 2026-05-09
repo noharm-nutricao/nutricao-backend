@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import text
 
 from exception.validation_error import ValidationError
@@ -7,7 +7,6 @@ from models.main import db
 from models.nutritional import NutritionalD7, NutritionalScreening
 from models.prescription import Patient
 from utils import status
-from utils.dateutils import now_sp
 
 
 def get_patients_repository():
@@ -185,7 +184,7 @@ def get_active_d7(nratendimento: int):
 
 
 def upsert_d7(nratendimento: int, idusuario: int) -> NutritionalD7:
-    now = now_sp()
+    now = datetime.now(timezone.utc)
     dt_prevista = now + timedelta(days=7)
 
     d7 = get_active_d7(nratendimento)
@@ -224,7 +223,7 @@ def close_d7(id: int, nratendimento: int) -> NutritionalD7:
         )
 
     d7.concluido = True
-    d7.updated_at = now_sp()
+    d7.updated_at = datetime.now(timezone.utc)
 
     db.session.flush()
     return d7

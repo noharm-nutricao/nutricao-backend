@@ -75,7 +75,7 @@ def get_d7(nratendimento):
 
 
 @app_nutritional.route(
-    "/nutritional/patients/<int:nratendimento>/d7/<int:id>/encerrar", methods=["PUT"]
+    "/nutritional/patients/<int:nratendimento>/d7/<int:id>/close", methods=["PUT"]
 )
 @api_endpoint()
 def close_d7(nratendimento, id):
