@@ -1,9 +1,12 @@
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import text
 
+from exception.validation_error import ValidationError
 from models.enums import SegmentTypeEnum
 from models.main import db
-from models.nutritional import NutritionalScreening
+from models.nutritional import NutritionalD7, NutritionalScreening
 from models.prescription import Patient
+from utils import status
 
 
 def get_patients_repository():
@@ -168,6 +171,63 @@ def get_active_admissions(schema: str):
     )
     result = db.session.execute(query, {"icu_type": SegmentTypeEnum.ICU.value})
     return result.fetchall()
+
+def get_active_d7(nratendimento: int):
+    return (
+        db.session.query(NutritionalD7)
+        .filter(
+            NutritionalD7.nratendimento == nratendimento,
+            NutritionalD7.concluido.is_(False),
+        )
+        .first()
+    )
+
+
+def upsert_d7(nratendimento: int, idusuario: int) -> NutritionalD7:
+    now = datetime.now(timezone.utc)
+    dt_prevista = now + timedelta(days=7)
+
+    d7 = get_active_d7(nratendimento)
+
+    if d7 is None:
+        d7 = NutritionalD7()
+        d7.nratendimento = nratendimento
+        d7.idusuario = idusuario
+        d7.created_at = now
+        db.session.add(d7)
+    else:
+        d7.updated_at = now
+
+    d7.dt_prevista = dt_prevista
+    d7.concluido = False
+
+    db.session.flush()
+    return d7
+
+
+def close_d7(id: int, nratendimento: int) -> NutritionalD7:
+    d7 = (
+        db.session.query(NutritionalD7)
+        .filter(
+            NutritionalD7.id == id,
+            NutritionalD7.nratendimento == nratendimento,
+        )
+        .first()
+    )
+
+    if d7 is None:
+        raise ValidationError(
+            "D7 não encontrado",
+            "errors.notFound",
+            status.HTTP_404_NOT_FOUND,
+        )
+
+    d7.concluido = True
+    d7.updated_at = datetime.now(timezone.utc)
+
+    db.session.flush()
+    return d7
+
 
 # Verify if we have the screening table and their columns.
 def _is_nutritional_screening_table_ready() -> bool:

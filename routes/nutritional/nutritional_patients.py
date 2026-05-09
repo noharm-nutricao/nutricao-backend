@@ -60,3 +60,23 @@ def calculate_mnutric(nratendimento):
 # @api_endpoint()
 def list_patients_with_campo1(nratendimento):
     return nutritional_patient_service.get_patients_by_nra(nratendimento)
+
+
+@app_nutritional.route("/nutritional/patients/<int:nratendimento>/d7", methods=["POST"])
+@api_endpoint()
+def create_d7(nratendimento):
+    return nutritional_patient_service.create_d7(nratendimento=nratendimento)
+
+
+@app_nutritional.route("/nutritional/patients/<int:nratendimento>/d7", methods=["GET"])
+@api_endpoint()
+def get_d7(nratendimento):
+    return nutritional_patient_service.get_d7(nratendimento=nratendimento)
+
+
+@app_nutritional.route(
+    "/nutritional/patients/<int:nratendimento>/d7/<int:id>/close", methods=["PUT"]
+)
+@api_endpoint()
+def close_d7(nratendimento, id):
+    return nutritional_patient_service.close_d7(nratendimento=nratendimento, id=id)
