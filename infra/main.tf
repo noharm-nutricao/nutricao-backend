@@ -69,3 +69,18 @@ resource "aws_lambda_alias" "live" {
   function_name    = aws_lambda_function.app.function_name
   function_version = aws_lambda_function.app.version
 }
+
+resource "aws_lambda_function_url" "app_url" {
+  function_name      = aws_lambda_function.app.function_name
+  authorization_type = "NONE"
+
+  qualifier = aws_lambda_alias.live.name
+
+  cors {
+    allow_credentials = true
+    allow_origins     = ["*"]
+    allow_methods     = ["*"]
+    allow_headers     = ["*"]
+    max_age           = 86400
+  }
+}
