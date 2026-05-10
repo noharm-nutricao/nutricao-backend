@@ -10,9 +10,9 @@ from utils.dateutils import now_sp
 
 
 @has_permission(Permission.READ_PRESCRIPTION)
-def get_alertas(nratendimento: int) -> list[dict]:
+def get_alerts(nratendimento: int) -> list[dict]:
     try:
-        alertas = nutritional_repository.get_alertas(nratendimento)
+        alerts = nutritional_repository.get_alertas(nratendimento)
         return [
             {
                 "id": a.id,
@@ -22,7 +22,7 @@ def get_alertas(nratendimento: int) -> list[dict]:
                 "reconhecido": a.reconhecido or False,
                 "reconhecido_at": a.reconhecido_at.isoformat() if a.reconhecido_at else None,
             }
-            for a in alertas
+            for a in alerts
         ]
     except Exception as e:
         logging.error(f"Erro ao buscar alertas do paciente {nratendimento}: {str(e)}")
@@ -30,17 +30,19 @@ def get_alertas(nratendimento: int) -> list[dict]:
 
 
 @has_permission(Permission.WRITE_NUTRITIONAL)
-def acknowledge_alerta(nratendimento: int, alerta_id: int, user_context: User):
-    alerta = nutritional_repository.get_alerta(nratendimento, alerta_id)
+def acknowledge_alert(nratendimento: int, alert_id: int, user_context: User):
+    logging.error(f"Buscando paciente {nratendimento}, alerta {alert_id}")
+    alert = nutritional_repository.get_alerta(nratendimento, alert_id)
+    logging.error(f"Encontrado {alert}")
 
-    if alerta is None or not alerta.ativo:
+    if alert is None or not alert.ativo:
         raise ValidationError(
             "Alerta não encontrado ou inativo",
             "errors.notFound",
             status.HTTP_404_NOT_FOUND,
         )
 
-    if alerta.reconhecido:
+    if alert.reconhecido:
         raise ValidationError(
             "Alerta já foi reconhecido",
             "errors.conflict",
@@ -48,12 +50,12 @@ def acknowledge_alerta(nratendimento: int, alerta_id: int, user_context: User):
         )
 
     reconhecido_at = now_sp()
-    alerta.reconhecido = True
-    alerta.reconhecido_por = user_context.id
-    alerta.reconhecido_at = reconhecido_at
+    alert.reconhecido = True
+    alert.reconhecido_por = user_context.id
+    alert.reconhecido_at = reconhecido_at
 
     return {
-        "id": alerta.id,
+        "id": alert.id,
         "reconhecido": True,
         "reconhecido_at": reconhecido_at.isoformat(),
     }

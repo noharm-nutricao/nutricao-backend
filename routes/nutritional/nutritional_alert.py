@@ -12,10 +12,10 @@ app_nutritional_alert = Blueprint("app_nutritional_alert", __name__)
     "/nutritional/patients/<int:nratendimento>/alertas", methods=["GET"]
 )
 @api_endpoint()
-def get_alertas(nratendimento: int):
+def get_alerts(nratendimento: int):
     logging.info(f"Buscando alertas do paciente {nratendimento}.")
     try:
-        data = nutritional_alert_service.get_alertas(nratendimento)
+        data = nutritional_alert_service.get_alerts(nratendimento)
         logging.info(f"Alertas do paciente {nratendimento} retornados com sucesso.")
         return data
     except Exception as e:
@@ -24,16 +24,16 @@ def get_alertas(nratendimento: int):
 
 
 @app_nutritional_alert.route(
-    "/nutritional/patients/<int:nratendimento>/alertas/<int:alerta_id>/acknowledge",
+    "/nutritional/patients/<int:nratendimento>/alerts/<int:alert_id>/acknowledge",
     methods=["POST"],
 )
 @api_endpoint()
 def acknowledge_alerta(nratendimento: int, alerta_id: int, user_context):
     logging.info(f"Reconhecendo alerta {alerta_id} do paciente {nratendimento}.")
     try:
-        data = nutritional_alert_service.acknowledge_alerta(
+        data = nutritional_alert_service.acknowledge_alert(
             nratendimento=nratendimento,
-            alerta_id=alerta_id,
+            alert_id=alerta_id,
             user_context=user_context,
         )
         logging.info(

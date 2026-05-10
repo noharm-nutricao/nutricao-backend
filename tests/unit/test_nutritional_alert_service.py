@@ -1,26 +1,12 @@
-
 """Unit tests: nutritional_alert_service."""
 
 from datetime import datetime
 from types import SimpleNamespace
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
-
-@pytest.fixture(autouse=True)
-def mock_db_session(monkeypatch):
-    """Sobrescreve qualquer tentativa de usar a sessão do banco real"""
-    mock = MagicMock()
-    # Se o seu service ou conftest usa 'app.orm.db.session'
-    monkeypatch.setattr("app.orm.db.session", mock)
-    return mock
-
-#Mock
-with patch("decorators.has_permission_decorator.has_permission", lambda perms: lambda f: f):
-    from services.nutritional import nutritional_alert_service as service
-
-
+from services.nutritional import nutritional_alert_service as service
 
 
 def _alerta(id, tipo, descricao, severidade, reconhecido=False, reconhecido_at=None):
@@ -34,8 +20,6 @@ def _alerta(id, tipo, descricao, severidade, reconhecido=False, reconhecido_at=N
     )
 
 
-#caminho feliz:Testa o fluxo normal, repositório retorna dados válidos e o serviço mapeia corretamente
-
 @pytest.mark.parametrize(
     "alertas, expected",
     [
@@ -45,51 +29,15 @@ def _alerta(id, tipo, descricao, severidade, reconhecido=False, reconhecido_at=N
                 _alerta(2, "hidrico", "Déficit hídrico", "media"),
             ],
             [
-                {
-                    "id": 1,
-                    "tipo": "nutricional",
-                    "descricao": "Risco de desnutrição",
-                    "severidade": "alta",
-                    "reconhecido": False,
-                    "reconhecido_at": None,
-                },
-                {
-                    "id": 2,
-                    "tipo": "hidrico",
-                    "descricao": "Déficit hídrico",
-                    "severidade": "media",
-                    "reconhecido": False,
-                    "reconhecido_at": None,
-                },
+                {"id": 1, "tipo": "nutricional", "descricao": "Risco de desnutrição", "severidade": "alta", "reconhecido": False, "reconhecido_at": None},
+                {"id": 2, "tipo": "hidrico", "descricao": "Déficit hídrico", "severidade": "media", "reconhecido": False, "reconhecido_at": None},
             ],
             id="retorna-lista-com-alertas",
         ),
+        pytest.param([], [], id="retorna-lista-vazia"),
         pytest.param(
-            [],
-            [],
-            id="retorna-lista-vazia",
-        ),
-        pytest.param(
-            [
-                _alerta(
-                    3,
-                    "nutricional",
-                    "Alerta reconhecido",
-                    "baixa",
-                    reconhecido=True,
-                    reconhecido_at=None,  # reconhecido_at ausente
-                ),
-            ],
-            [
-                {
-                    "id": 3,
-                    "tipo": "nutricional",
-                    "descricao": "Alerta reconhecido",
-                    "severidade": "baixa",
-                    "reconhecido": True,
-                    "reconhecido_at": None,
-                }
-            ],
+            [_alerta(3, "nutricional", "Alerta reconhecido", "baixa", reconhecido=True)],
+            [{"id": 3, "tipo": "nutricional", "descricao": "Alerta reconhecido", "severidade": "baixa", "reconhecido": True, "reconhecido_at": None}],
             id="reconhecido-sem-data",
         ),
     ],
@@ -97,54 +45,23 @@ def _alerta(id, tipo, descricao, severidade, reconhecido=False, reconhecido_at=N
 @patch("services.nutritional.nutritional_alert_service.nutritional_repository")
 def test_get_alertas_caminho_feliz(mock_repo, alertas, expected):
     """get_alertas: retorna lista de alertas corretamente mapeada"""
-    mock_repo.get_alertas.return_value = alertas
-
-    result = service.get_alertas(9999)
-
+    mock_repo.get_alerts.return_value = alertas
+    result = service.get_alerts(9999)
     assert result == expected
-    mock_repo.get_alertas.assert_called_once_with(9999)
+    mock_repo.get_alerts.assert_called_once_with(9999)
 
-
-# caminho do meio: Testa os casos limite, dados válidos mas com comportamento especial- 100 alertas
 
 @pytest.mark.parametrize(
     "alertas, expected",
     [
         pytest.param(
             [_alerta(4, "nutricional", "Alerta", "alta", reconhecido=None)],
-            [
-                {
-                    "id": 4,
-                    "tipo": "nutricional",
-                    "descricao": "Alerta",
-                    "severidade": "alta",
-                    "reconhecido": False,  # None vira False
-                    "reconhecido_at": None,
-                }
-            ],
+            [{"id": 4, "tipo": "nutricional", "descricao": "Alerta", "severidade": "alta", "reconhecido": False, "reconhecido_at": None}],
             id="reconhecido-none-vira-false",
         ),
         pytest.param(
-            [
-                _alerta(
-                    5,
-                    "nutricional",
-                    "Alerta com data",
-                    "media",
-                    reconhecido=True,
-                    reconhecido_at=__import__("datetime").datetime(2026, 4, 10, 12, 0, 0),
-                )
-            ],
-            [
-                {
-                    "id": 5,
-                    "tipo": "nutricional",
-                    "descricao": "Alerta com data",
-                    "severidade": "media",
-                    "reconhecido": True,
-                    "reconhecido_at": "2026-04-10T12:00:00",
-                }
-            ],
+            [_alerta(5, "nutricional", "Alerta com data", "media", reconhecido=True, reconhecido_at=datetime(2026, 4, 10, 12, 0, 0))],
+            [{"id": 5, "tipo": "nutricional", "descricao": "Alerta com data", "severidade": "media", "reconhecido": True, "reconhecido_at": "2026-04-10T12:00:00"}],
             id="reconhecido-com-data-isoformat",
         ),
         pytest.param(
@@ -157,16 +74,13 @@ def test_get_alertas_caminho_feliz(mock_repo, alertas, expected):
 @patch("services.nutritional.nutritional_alert_service.nutritional_repository")
 def test_get_alertas_caminho_do_meio(mock_repo, alertas, expected):
     """get_alertas: comportamentos intermediários"""
-    mock_repo.get_alertas.return_value = alertas
-
-    result = service.get_alertas(9999)
-
+    mock_repo.get_alerts.return_value = alertas
+    result = service.get_alerts(9999)
     if isinstance(expected, int):
         assert len(result) == expected
     else:
         assert result == expected
 
-# caminho nao feliz: Testa quando o repositório falha
 
 @pytest.mark.parametrize(
     "exception",
@@ -179,7 +93,6 @@ def test_get_alertas_caminho_do_meio(mock_repo, alertas, expected):
 @patch("services.nutritional.nutritional_alert_service.nutritional_repository")
 def test_get_alertas_caminho_nao_feliz(mock_repo, exception):
     """get_alertas: propaga exceção do repositório"""
-    mock_repo.get_alertas.side_effect = exception
-
+    mock_repo.get_alerts.side_effect = exception
     with pytest.raises(type(exception)):
-        service.get_alertas(9999)
+        service.get_alerts(9999)
