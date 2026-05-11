@@ -1,11 +1,11 @@
 from decorators.has_permission_decorator import has_permission
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 
+from models.main import User
 from exception.validation_error import ValidationError
 from models.main import db
 from models.nutritional import NutritionalAssessment, NutritionalD7
-from models.prescription import Patient
 from repository.nutritional import nutritional_repository
 from security.permission import Permission
 import logging
@@ -220,6 +220,60 @@ def _restore_sofa_from_dimension(score):
 
     return score
 
+def _calculate_status(d7: NutritionalD7) -> str:
+    if d7.concluido:
+        return "concluido"
+
+    dt_prevista = d7.dt_prevista
+    now = datetime.now(dt_prevista.tzinfo) if dt_prevista.tzinfo else datetime.now()
+
+    if dt_prevista > now + timedelta(hours=48):
+        return "pendente"
+    if dt_prevista > now:
+        return "vencendo"
+    return "vencido"
+
+
+def _datetime_to_iso(value: datetime) -> str | None:
+    if value is None:
+        return None
+
+    return value.isoformat()
+
+
+def _d7_to_dict(d7: NutritionalD7) -> dict:
+    return {
+        "id": d7.id,
+        "dt_prevista": _datetime_to_iso(d7.dt_prevista),
+        "concluido": d7.concluido,
+        "status": _calculate_status(d7),
+        "updated_at": _datetime_to_iso(d7.updated_at),
+    }
+
+
+@has_permission(Permission.WRITE_NUTRITIONAL)
+def create_d7(nratendimento: int, user_context: User):
+    d7 = nutritional_repository.upsert_d7(
+        nratendimento=nratendimento,
+        idusuario=user_context.id,
+    )
+    return _d7_to_dict(d7)
+
+
+@has_permission(Permission.WRITE_NUTRITIONAL)
+def get_d7(nratendimento: int, user_context: User):
+    d7 = nutritional_repository.get_active_d7(nratendimento)
+    if d7 is None:
+        return None
+    return _d7_to_dict(d7)
+
+
+@has_permission(Permission.WRITE_NUTRITIONAL)
+def close_d7(nratendimento: int, id: int, user_context: User):
+    d7 = nutritional_repository.close_d7(id=id, nratendimento=nratendimento)
+    return _d7_to_dict(d7)
+
+
 def get_patients_by_nra(nratendimento: int):
     """
     Busca pacientes pelo nratendimento filtrando na service.
@@ -282,7 +336,7 @@ def get_assessments(nratendimento: int, limit: int = 10):
         nratendimento=nratendimento,
         limit=limit
     )
-    
+
     return {
         "data": [
             {
@@ -302,9 +356,9 @@ def get_assessments(nratendimento: int, limit: int = 10):
 
 def _calculate_d7_date(prox_visita: str):
     from datetime import datetime, timedelta
-    
+
     now = datetime.now()
-    
+
     if prox_visita == "24h":
         return now + timedelta(hours=24)
     elif prox_visita == "48h":
@@ -321,11 +375,11 @@ def _handle_d7_closure(nratendimento: int, prox_visita: str, idusuario: int):
     if prox_visita == "D7":
         # Busca D7 ativo
         active_d7 = nutritional_repository.get_active_d7(nratendimento)
-        
+
         if active_d7:
             # Encerra D7 ativo
             nutritional_repository.close_d7(active_d7.id)
-        
+
         # Cria novo D7
         dt_prevista = _calculate_d7_date("D7")
         nutritional_repository.create_d7(
@@ -338,15 +392,15 @@ def _handle_d7_closure(nratendimento: int, prox_visita: str, idusuario: int):
 def close_and_create_d7(d7_id: int, idusuario: int):
     # Busca D7 para obter nratendimento
     d7 = db.session.query(NutritionalD7).filter(NutritionalD7.id == d7_id).first()
-    
+
     if not d7:
         raise ValidationError("D7 não encontrado", "errors.notFound", status.HTTP_404_NOT_FOUND)
-    
+
     nratendimento = d7.nratendimento
-    
+
     # Encerra D7
     nutritional_repository.close_d7(d7_id)
-    
+
     # Cria novo D7
     dt_prevista = _calculate_d7_date("D7")
     new_d7 = nutritional_repository.create_d7(
@@ -354,9 +408,9 @@ def close_and_create_d7(d7_id: int, idusuario: int):
         dt_prevista=dt_prevista,
         idusuario=idusuario
     )
-    
+
     db.session.commit()
-    
+
     return {
         "status": "success",
         "d7_encerrado": d7_id,

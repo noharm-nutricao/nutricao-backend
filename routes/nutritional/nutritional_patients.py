@@ -87,20 +87,28 @@ def create_assessment(nratendimento: int, user_context):
 @api_endpoint()
 def list_assessments(nratendimento: int):
     limit = request.args.get("limit", 10, type=int)
-    
+
     return nutritional_patient_service.get_assessments(
         nratendimento=nratendimento,
         limit=limit
     )
 
 
+@app_nutritional.route("/nutritional/patients/<int:nratendimento>/d7", methods=["POST"])
+@api_endpoint()
+def create_d7(nratendimento):
+    return nutritional_patient_service.create_d7(nratendimento=nratendimento)
+
+
+@app_nutritional.route("/nutritional/patients/<int:nratendimento>/d7", methods=["GET"])
+@api_endpoint()
+def get_d7(nratendimento):
+    return nutritional_patient_service.get_d7(nratendimento=nratendimento)
+
+
 @app_nutritional.route(
-    "/nutritional/d7/<int:d7_id>/encerrar",
-    methods=["PUT"]
+    "/nutritional/patients/<int:nratendimento>/d7/<int:id>/close", methods=["PUT"]
 )
 @api_endpoint()
-def close_d7_endpoint(d7_id: int, user_context):
-    return nutritional_patient_service.close_and_create_d7(
-        d7_id=d7_id,
-        idusuario=user_context.id
-    )
+def close_d7(nratendimento, id):
+    return nutritional_patient_service.close_d7(nratendimento=nratendimento, id=id)
