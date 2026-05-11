@@ -387,33 +387,3 @@ def _handle_d7_closure(nratendimento: int, prox_visita: str, idusuario: int):
             dt_prevista=dt_prevista,
             idusuario=idusuario
         )
-
-
-def close_and_create_d7(d7_id: int, idusuario: int):
-    # Busca D7 para obter nratendimento
-    d7 = db.session.query(NutritionalD7).filter(NutritionalD7.id == d7_id).first()
-
-    if not d7:
-        raise ValidationError("D7 não encontrado", "errors.notFound", status.HTTP_404_NOT_FOUND)
-
-    nratendimento = d7.nratendimento
-
-    # Encerra D7
-    nutritional_repository.close_d7(d7_id)
-
-    # Cria novo D7
-    dt_prevista = _calculate_d7_date("D7")
-    new_d7 = nutritional_repository.create_d7(
-        nratendimento=nratendimento,
-        dt_prevista=dt_prevista,
-        idusuario=idusuario
-    )
-
-    db.session.commit()
-
-    return {
-        "status": "success",
-        "d7_encerrado": d7_id,
-        "novo_d7_id": new_d7.id,
-        "novo_d7_data": new_d7.dt_prevista.isoformat()
-    }

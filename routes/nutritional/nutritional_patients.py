@@ -64,7 +64,7 @@ def list_patients_with_campo1(nratendimento):
 
 
 @app_nutritional.route(
-    "/nutritional/patients/<int:nratendimento>/avaliacoes",
+    "/nutritional/patients/<int:nratendimento>/assessments",
     methods=["POST"]
 )
 @api_endpoint()
@@ -81,7 +81,7 @@ def create_assessment(nratendimento: int, user_context):
 
 
 @app_nutritional.route(
-    "/nutritional/patients/<int:nratendimento>/avaliacoes",
+    "/nutritional/patients/<int:nratendimento>/assessments",
     methods=["GET"]
 )
 @api_endpoint()
