@@ -295,20 +295,23 @@ def get_patients_by_nra(nratendimento: int):
         )
 
 
+@has_permission(Permission.WRITE_NUTRITIONAL)
 def create_assessment(nratendimento: int, data, idusuario: int):
     patient = get_patients_by_nra(nratendimento)
 
     if not patient:
         raise ValidationError("Paciente não encontrado", "errors.notFound", status.HTTP_404_NOT_FOUND)
 
+    created_at = datetime.now()
     assessment = NutritionalAssessment(
         nratendimento=nratendimento,
         idusuario=idusuario,
         conduta=data.conduta,
-        frequencia=data.prox_visita,
+        frequencia=data.frequencia,
         ingestao=data.ingestao,
         meta_kcal=data.meta_kcal,
-        meta_prot=data.meta_prot
+        meta_prot=data.meta_prot,
+        created_at=created_at
     )
 
     nutritional_repository.create_assessment(assessment)
@@ -327,10 +330,11 @@ def create_assessment(nratendimento: int, data, idusuario: int):
         "ingestao": assessment.ingestao,
         "meta_kcal": assessment.meta_kcal,
         "meta_prot": assessment.meta_prot,
-        "created_at": assessment.created_at.isoformat()
+        "created_at": _datetime_to_iso(created_at)
     }
 
 
+@has_permission(Permission.READ_PRESCRIPTION)
 def get_assessments(nratendimento: int, limit: int = 10):
     total, assessments = nutritional_repository.get_assessments_by_nratendimento(
         nratendimento=nratendimento,
@@ -346,7 +350,7 @@ def get_assessments(nratendimento: int, limit: int = 10):
                 "ingestao": assessment.ingestao,
                 "meta_kcal": assessment.meta_kcal,
                 "meta_prot": assessment.meta_prot,
-                "created_at": assessment.created_at.isoformat()
+                "created_at": _datetime_to_iso(assessment.created_at)
             }
             for assessment in assessments
         ],
@@ -378,7 +382,10 @@ def _handle_d7_closure(nratendimento: int, prox_visita: str, idusuario: int):
 
         if active_d7:
             # Encerra D7 ativo
-            nutritional_repository.close_d7(active_d7.id)
+            nutritional_repository.close_d7(
+                id=active_d7.id,
+                nratendimento=nratendimento
+            )
 
         # Cria novo D7
         dt_prevista = _calculate_d7_date("D7")

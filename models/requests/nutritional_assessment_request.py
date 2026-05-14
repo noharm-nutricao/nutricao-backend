@@ -1,6 +1,7 @@
 from typing import Optional
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, computed_field, field_validator
 
+_FREQUENCIA_MAP = {"D7": "7d", "semanal": "7d"}
 
 class NutritionalAssessmentRequest(BaseModel):
     conduta: str
@@ -15,6 +16,11 @@ class NutritionalAssessmentRequest(BaseModel):
         if not value.strip():
             raise ValueError("conduta obrigatoria")
         return value
+
+    @computed_field
+    @property
+    def frequencia(self) -> str:
+        return _FREQUENCIA_MAP.get(self.prox_visita, self.prox_visita)
 
     @field_validator("prox_visita")
     @classmethod
