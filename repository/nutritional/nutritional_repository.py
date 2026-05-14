@@ -4,6 +4,7 @@ from sqlalchemy import text
 from exception.validation_error import ValidationError
 from models.enums import SegmentTypeEnum
 from models.main import db
+from models.nutritional import NutritionalScreening, NutritionalAssessment, NutritionalD7
 from models.nutritional import NutritionalD7, NutritionalScreening
 from models.prescription import Patient
 from utils import status
@@ -278,3 +279,62 @@ def _is_nutritional_screening_table_ready() -> bool:
     }
 
     return required_columns.issubset(existing_columns)
+
+
+def create_assessment(assessment: NutritionalAssessment):
+    db.session.add(assessment)
+    db.session.flush()
+
+
+def get_assessments_by_nratendimento(nratendimento: int, limit: int = 10):
+    """Retorna avaliacoes de um paciente ordenadas por data desc (mais recentes primeiro).
+
+    Args:
+        nratendimento: ID do atendimento
+        limit: Máximo de registros retornados (default: 10)
+
+    Returns:
+        Tuple com (total, assessments) onde assessments é lista em ordem cronológica inversa
+    """
+    total = (
+        db.session.query(NutritionalAssessment)
+        .filter(NutritionalAssessment.nratendimento == nratendimento)
+        .count()
+    )
+
+    assessments = (
+        db.session.query(NutritionalAssessment)
+        .filter(NutritionalAssessment.nratendimento == nratendimento)
+        .order_by(NutritionalAssessment.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    return total, assessments
+
+
+def create_d7(nratendimento: int, dt_prevista, idusuario: int = None):
+    """Cria um novo D7.
+
+    Args:
+        nratendimento: ID do atendimento
+        dt_prevista: Data prevista para o D7
+        idusuario: ID do usuário que criou (opcional)
+
+    Returns:
+        NutritionalD7 object criado
+    """
+    from datetime import datetime
+
+    d7 = NutritionalD7(
+        nratendimento=nratendimento,
+        dt_prevista=dt_prevista,
+        concluido=False,
+        idusuario=idusuario,
+        created_at=datetime.now()
+    )
+
+    db.session.add(d7)
+    db.session.flush()
+
+    return d7

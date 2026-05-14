@@ -3,10 +3,15 @@ from datetime import datetime, timedelta
 from types import SimpleNamespace
 
 from models.main import User
-from models.nutritional import NutritionalD7
+from exception.validation_error import ValidationError
+from models.main import db
+from models.nutritional import NutritionalAssessment, NutritionalD7
 from repository.nutritional import nutritional_repository
 from security.permission import Permission
 import logging
+
+from utils import status
+
 
 @has_permission(Permission.READ_PRESCRIPTION)
 def get_patients():
@@ -287,4 +292,105 @@ def get_patients_by_nra(nratendimento: int):
         logging.error(f"Erro ao buscar pacientes no repositório: {str(e)}")
         raise Exception(
             "Estamos com problemas para consultar pacientes em nossa base, tente novamente mais tarde"
+        )
+
+
+@has_permission(Permission.WRITE_NUTRITIONAL)
+def create_assessment(nratendimento: int, data, idusuario: int):
+    patient = get_patients_by_nra(nratendimento)
+
+    if not patient:
+        raise ValidationError("Paciente não encontrado", "errors.notFound", status.HTTP_404_NOT_FOUND)
+
+    created_at = datetime.now()
+    assessment = NutritionalAssessment(
+        nratendimento=nratendimento,
+        idusuario=idusuario,
+        conduta=data.conduta,
+        frequencia=data.frequencia,
+        ingestao=data.ingestao,
+        meta_kcal=data.meta_kcal,
+        meta_prot=data.meta_prot,
+        created_at=created_at
+    )
+
+    nutritional_repository.create_assessment(assessment)
+
+    # Se prox_visita = D7, encerra D7 ativo e cria novo
+    _handle_d7_closure(
+        nratendimento=nratendimento,
+        prox_visita=data.prox_visita,
+        idusuario=idusuario
+    )
+
+    return {
+        "id": assessment.id,
+        "conduta": assessment.conduta,
+        "prox_visita": assessment.frequencia,
+        "ingestao": assessment.ingestao,
+        "meta_kcal": assessment.meta_kcal,
+        "meta_prot": assessment.meta_prot,
+        "created_at": _datetime_to_iso(created_at)
+    }
+
+
+@has_permission(Permission.READ_PRESCRIPTION)
+def get_assessments(nratendimento: int, limit: int = 10):
+    total, assessments = nutritional_repository.get_assessments_by_nratendimento(
+        nratendimento=nratendimento,
+        limit=limit
+    )
+
+    return {
+        "data": [
+            {
+                "id": assessment.id,
+                "conduta": assessment.conduta,
+                "prox_visita": assessment.frequencia,
+                "ingestao": assessment.ingestao,
+                "meta_kcal": assessment.meta_kcal,
+                "meta_prot": assessment.meta_prot,
+                "created_at": _datetime_to_iso(assessment.created_at)
+            }
+            for assessment in assessments
+        ],
+        "total": total
+    }
+
+
+def _calculate_d7_date(prox_visita: str):
+    from datetime import datetime, timedelta
+
+    now = datetime.now()
+
+    if prox_visita == "24h":
+        return now + timedelta(hours=24)
+    elif prox_visita == "48h":
+        return now + timedelta(hours=48)
+    elif prox_visita == "semanal":
+        return now + timedelta(days=7)
+    elif prox_visita == "D7":
+        return now + timedelta(days=7)
+    else:  # rotina
+        return now + timedelta(days=30)
+
+
+def _handle_d7_closure(nratendimento: int, prox_visita: str, idusuario: int):
+    if prox_visita == "D7":
+        # Busca D7 ativo
+        active_d7 = nutritional_repository.get_active_d7(nratendimento)
+
+        if active_d7:
+            # Encerra D7 ativo
+            nutritional_repository.close_d7(
+                id=active_d7.id,
+                nratendimento=nratendimento
+            )
+
+        # Cria novo D7
+        dt_prevista = _calculate_d7_date("D7")
+        nutritional_repository.create_d7(
+            nratendimento=nratendimento,
+            dt_prevista=dt_prevista,
+            idusuario=idusuario
         )
