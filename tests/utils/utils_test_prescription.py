@@ -9,13 +9,20 @@ from models.prescription import (
     PrescriptionAudit,
     PrescriptionDrug,
 )
-from tests.conftest import session, session_commit
 
 # Use mutable object to track counters across function calls
 test_counters = {"id_prescription": 100000, "admission_number": 100000}
 
 
+def _get_db_helpers():
+    from tests.conftest import session, session_commit
+
+    return session, session_commit
+
+
 def prepare_test_aggregate(id, admissionNumber, prescriptionid1, prescriptionid2):
+    session, session_commit = _get_db_helpers()
+
     """Deleção da prescrição agregada já existente."""
 
     session.query(Prescription).filter(Prescription.id == id).delete()
@@ -156,6 +163,8 @@ def create_prescription(
     user: int = 1,
 ):
     """Create a Prescription record for testing."""
+    session, session_commit = _get_db_helpers()
+
     prescription = Prescription()
     prescription.id = id
     prescription.admissionNumber = admissionNumber
@@ -208,6 +217,8 @@ def create_prescription_drug(
     order_number: int = None,
 ):
     """Create a PrescriptionDrug record for testing."""
+    session, session_commit = _get_db_helpers()
+
     prescription_drug = PrescriptionDrug()
     prescription_drug.id = id
     prescription_drug.idPrescription = idPrescription
