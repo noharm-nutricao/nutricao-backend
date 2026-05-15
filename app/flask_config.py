@@ -64,11 +64,13 @@ class TestConfig(BaseConfig):
     TESTING = True
     DEBUG = True
     CORS_ORIGINS = [Config.MAIL_HOST, "http://localhost:3000"]
-    DB_HOST = os.getenv("DB_HOST")
+    DB_HOST = os.environ["DB_HOST"]
     DB_PORT = os.getenv("DB_PORT", "5432")
-    DB_NAME = os.getenv("DB_NAME")
-    DB_USER = os.getenv("DB_USER")
-    DB_PASSWORD = os.getenv("DB_PASSWORD")
+    DB_NAME = os.environ["DB_NAME"]
+    DB_USER = os.environ["DB_USER"]
+    DB_PASSWORD = os.environ["DB_PASSWORD"]
+
+    print(f"DB CONFIG host={DB_HOST}, port={DB_PORT}, name={DB_NAME}, user={DB_USER}")
 
     SQLALCHEMY_DATABASE_URI = (
         f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
