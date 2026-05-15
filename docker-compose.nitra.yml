@@ -16,9 +16,14 @@ services:
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
 
-      # Se teu código ainda usa essas configs antigas:
       POTGRESQL_CONNECTION_STRING: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@db:5432/${DB_NAME:-noharm}
       REPORT_CONNECTION_STRING: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@db:5432/${DB_NAME:-noharm}
+
+      FLASK_ENV: development
+      FLASK_DEBUG: "1"
+
+    command: >
+      sh -c "python -m flask --app app run --host=0.0.0.0 --port=5000"
 
     depends_on:
       db:
