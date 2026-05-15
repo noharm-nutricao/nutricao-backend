@@ -111,10 +111,10 @@ def _insert_alert(alert_id, ativo, reconhecido):
             "adm": _ADM,
             "tipo": "lab",
             "descricao": "NPO",
-            "severidade": "alta",
+            "severidade": "amarelo",
             "ativo": ativo,
             "reconhecido": reconhecido,
-            "reconhecido_por": _get_user_id() if reconhecido else None,
+            "reconhecido_por": _get_user_id(),
         },
     )
     session_commit()

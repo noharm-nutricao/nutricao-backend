@@ -28,16 +28,16 @@ def get_alerts(nratendimento: int):
     methods=["POST"],
 )
 @api_endpoint()
-def acknowledge_alerta(nratendimento: int, alerta_id: int, user_context):
-    logging.info(f"Reconhecendo alerta {alerta_id} do paciente {nratendimento}.")
+def acknowledge_alerta(nratendimento: int, alert_id: int, user_context):
+    logging.info(f"Reconhecendo alerta {alert_id} do paciente {nratendimento}.")
     try:
         data = nutritional_alert_service.acknowledge_alert(
             nratendimento=nratendimento,
-            alert_id=alerta_id,
+            alert_id=alert_id,
             user_context=user_context,
         )
         logging.info(
-            f"Alerta {alerta_id} do paciente {nratendimento} reconhecido com sucesso."
+            f"Alerta {alert_id} do paciente {nratendimento} reconhecido com sucesso."
         )
         return data
     except Exception as e:

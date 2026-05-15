@@ -45,10 +45,10 @@ def _alerta(id, tipo, descricao, severidade, reconhecido=False, reconhecido_at=N
 @patch("services.nutritional.nutritional_alert_service.nutritional_repository")
 def test_get_alertas_caminho_feliz(mock_repo, alertas, expected):
     """get_alertas: retorna lista de alertas corretamente mapeada"""
-    mock_repo.get_alerts.return_value = alertas
-    result = service.get_alerts(9999)
+    mock_repo.get_alertas.return_value = alertas
+    result = service.get_alerts.__wrapped__(9999)
     assert result == expected
-    mock_repo.get_alerts.assert_called_once_with(9999)
+    mock_repo.get_alertas.assert_called_once_with(9999)
 
 
 @pytest.mark.parametrize(
@@ -74,8 +74,8 @@ def test_get_alertas_caminho_feliz(mock_repo, alertas, expected):
 @patch("services.nutritional.nutritional_alert_service.nutritional_repository")
 def test_get_alertas_caminho_do_meio(mock_repo, alertas, expected):
     """get_alertas: comportamentos intermediários"""
-    mock_repo.get_alerts.return_value = alertas
-    result = service.get_alerts(9999)
+    mock_repo.get_alertas.return_value = alertas
+    result = service.get_alerts.__wrapped__(9999)
     if isinstance(expected, int):
         assert len(result) == expected
     else:
@@ -93,6 +93,6 @@ def test_get_alertas_caminho_do_meio(mock_repo, alertas, expected):
 @patch("services.nutritional.nutritional_alert_service.nutritional_repository")
 def test_get_alertas_caminho_nao_feliz(mock_repo, exception):
     """get_alertas: propaga exceção do repositório"""
-    mock_repo.get_alerts.side_effect = exception
+    mock_repo.get_alertas.side_effect = exception
     with pytest.raises(type(exception)):
-        service.get_alerts(9999)
+        service.get_alerts.__wrapped__(9999)
