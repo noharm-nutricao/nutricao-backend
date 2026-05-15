@@ -9,7 +9,7 @@ app_nutritional_alert = Blueprint("app_nutritional_alert", __name__)
 
 
 @app_nutritional_alert.route(
-    "/nutritional/patients/<int:nratendimento>/alertas", methods=["GET"]
+    "/nutritional/patients/<int:nratendimento>/alerts", methods=["GET"]
 )
 @api_endpoint()
 def get_alerts(nratendimento: int):
