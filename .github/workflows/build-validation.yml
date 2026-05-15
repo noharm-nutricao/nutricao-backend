@@ -26,13 +26,22 @@ jobs:
         run: |
           for i in {1..20}; do
             if curl -s http://localhost:5000/nutritional/healthz; then
+              echo "API respondeu com sucesso"
               exit 0
             fi
+
+            echo "Aguardando API subir... tentativa $i"
             sleep 5
           done
-          docker compose logs
+
+          echo "API não respondeu. Exibindo logs:"
+          docker compose -f docker-compose.nitra.yml logs
           exit 1
 
       - name: Derrubar
         if: always()
         run: docker compose -f docker-compose.nitra.yml down -v
+
+      - name: Logs em caso de falha
+        if: failure()
+        run: docker compose -f docker-compose.nitra.yml logs
