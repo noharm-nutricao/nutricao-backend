@@ -4,8 +4,12 @@ from sqlalchemy import text
 from exception.validation_error import ValidationError
 from models.enums import SegmentTypeEnum
 from models.main import db
-from models.nutritional import NutritionalScreening, NutritionalAssessment, NutritionalD7
-from models.nutritional import NutritionalD7, NutritionalScreening
+from models.nutritional import (
+    NutritionalAssessment,
+    NutritionalD7,
+    NutritionalGlim,
+    NutritionalScreening,
+)
 from models.prescription import Patient
 from utils import status
 
@@ -311,6 +315,45 @@ def get_assessments_by_nratendimento(nratendimento: int, limit: int = 10):
     )
 
     return total, assessments
+
+
+def get_latest_glim(nratendimento: int) -> NutritionalGlim | None:
+    return (
+        db.session.query(NutritionalGlim)
+        .filter(NutritionalGlim.nratendimento == nratendimento)
+        .order_by(NutritionalGlim.created_at.desc(), NutritionalGlim.id.desc())
+        .first()
+    )
+
+
+def upsert_glim(
+    nratendimento: int,
+    diagnostico: str,
+    fenotipos: list[str],
+    etiologias: list[str],
+    observacao: str | None,
+    idusuario: int,
+) -> NutritionalGlim:
+    now = datetime.now(timezone.utc)
+
+    glim = get_latest_glim(nratendimento)
+
+    if glim is None:
+        glim = NutritionalGlim()
+        glim.nratendimento = nratendimento
+        glim.created_at = now
+        db.session.add(glim)
+    else:
+        glim.updated_at = now
+
+    glim.diagnostico = diagnostico
+    glim.fenotipos = fenotipos
+    glim.etiologias = etiologias
+    glim.observacao = observacao
+    glim.idusuario = idusuario
+
+    db.session.flush()
+    return glim
 
 
 def create_d7(nratendimento: int, dt_prevista, idusuario: int = None):
