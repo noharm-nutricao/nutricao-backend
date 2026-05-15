@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - infra/terraform-backend
+      - develop
 
 permissions:
   contents: read
