@@ -92,6 +92,16 @@ resource "aws_lambda_function" "app" {
     security_group_ids = [aws_security_group.lambda_sg.id]
   }
 
+  environment {
+    variables = {
+      DB_HOST     = var.db_host
+      DB_PORT     = "5432"
+      DB_NAME     = var.db_name
+      DB_USER     = var.db_user
+      DB_PASSWORD = var.db_password
+    }
+  }
+
   depends_on = [
     aws_iam_role_policy_attachment.lambda_basic,
     aws_iam_role_policy_attachment.lambda_vpc

@@ -6,6 +6,7 @@ This module defines configuration classes for different environments
 
 from config import Config
 from models.enums import NoHarmENV
+import os
 
 
 class BaseConfig:
@@ -63,8 +64,19 @@ class TestConfig(BaseConfig):
     TESTING = True
     DEBUG = True
     CORS_ORIGINS = [Config.MAIL_HOST, "http://localhost:3000"]
-    SQLALCHEMY_DATABASE_URI = "postgresql://postgres@db:5432/noharm"
-    SQLALCHEMY_BINDS = {"report": "postgresql://postgres@localhost/noharm"}
+    DB_HOST = os.getenv("DB_HOST")
+    DB_PORT = os.getenv("DB_PORT", "5432")
+    DB_NAME = os.getenv("DB_NAME")
+    DB_USER = os.getenv("DB_USER")
+    DB_PASSWORD = os.getenv("DB_PASSWORD")
+
+    SQLALCHEMY_DATABASE_URI = (
+        f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    )
+
+    SQLALCHEMY_BINDS = {
+        "report": SQLALCHEMY_DATABASE_URI
+    }
 
 
 def get_config(config_name=None):

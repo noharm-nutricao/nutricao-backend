@@ -46,7 +46,11 @@ jobs:
             -target=aws_ecr_repository.app \
             -var="aws_region=${{ secrets.AWS_REGION }}" \
             -var="project_name=${{ env.PROJECT_NAME }}" \
-            -var="image_uri=dummy"
+            -var="image_uri=dummy" \
+            -var="db_host=${{ secrets.DB_HOST }}" \
+            -var="db_name=${{ secrets.DB_NAME }}" \
+            -var="db_user=${{ secrets.DB_USER }}" \
+            -var="db_password=${{ secrets.DB_PASSWORD }}"
 
       - name: Login no ECR
         id: ecr
@@ -69,7 +73,11 @@ jobs:
           terraform apply -auto-approve \
             -var="aws_region=${{ secrets.AWS_REGION }}" \
             -var="project_name=${{ env.PROJECT_NAME }}" \
-            -var="image_uri=$ECR_REGISTRY/$PROJECT_NAME:$IMAGE_TAG"
+            -var="image_uri=$ECR_REGISTRY/$PROJECT_NAME:$IMAGE_TAG" \
+            -var="db_host=${{ secrets.DB_HOST }}" \
+            -var="db_name=${{ secrets.DB_NAME }}" \
+            -var="db_user=${{ secrets.DB_USER }}" \
+            -var="db_password=${{ secrets.DB_PASSWORD }}"
 
       - name: Publica nova versão
         id: publish
