@@ -4,6 +4,7 @@ from flask import Blueprint, request
 
 from decorators.api_endpoint_decorator import api_endpoint
 from models.requests.nutritional_assessment_request import NutritionalAssessmentRequest
+from models.requests.nutritional_glim_request import NutritionalGlimRequest
 from repository.nutritional import nutritional_nrs_repository
 
 from services.nutritional import nutritional_patient_service
@@ -92,6 +93,32 @@ def list_assessments(nratendimento: int):
         nratendimento=nratendimento,
         limit=limit
     )
+
+
+@app_nutritional.route(
+    "/nutritional/patients/<int:nratendimento>/glim",
+    methods=["POST"]
+)
+@api_endpoint()
+def save_glim(nratendimento: int, user_context):
+    data = request.get_json(silent=True) or {}
+
+    payload = NutritionalGlimRequest(**data)
+
+    return nutritional_patient_service.save_glim(
+        nratendimento=nratendimento,
+        data=payload,
+        idusuario=user_context.id
+    )
+
+
+@app_nutritional.route(
+    "/nutritional/patients/<int:nratendimento>/glim",
+    methods=["GET"]
+)
+@api_endpoint()
+def get_glim(nratendimento: int):
+    return nutritional_patient_service.get_glim(nratendimento=nratendimento)
 
 
 @app_nutritional.route("/nutritional/patients/<int:nratendimento>/d7", methods=["POST"])

@@ -5,7 +5,8 @@ from types import SimpleNamespace
 from models.main import User
 from exception.validation_error import ValidationError
 from models.main import db
-from models.nutritional import NutritionalAssessment, NutritionalD7
+from models.nutritional import NutritionalAssessment, NutritionalD7, NutritionalGlim
+from models.requests.nutritional_glim_request import diagnostico_to_api
 from repository.nutritional import nutritional_repository
 from security.permission import Permission
 import logging
@@ -251,6 +252,16 @@ def _d7_to_dict(d7: NutritionalD7) -> dict:
     }
 
 
+def _glim_to_dict(glim: NutritionalGlim) -> dict:
+    return {
+        "diagnostico": diagnostico_to_api(glim.diagnostico),
+        "fenotipos": glim.fenotipos or [],
+        "etiologias": glim.etiologias or [],
+        "observacao": glim.observacao,
+        "created_at": _datetime_to_iso(glim.created_at),
+    }
+
+
 @has_permission(Permission.WRITE_NUTRITIONAL)
 def create_d7(nratendimento: int, user_context: User):
     d7 = nutritional_repository.upsert_d7(
@@ -272,6 +283,73 @@ def get_d7(nratendimento: int, user_context: User):
 def close_d7(nratendimento: int, id: int, user_context: User):
     d7 = nutritional_repository.close_d7(id=id, nratendimento=nratendimento)
     return _d7_to_dict(d7)
+
+
+def _validate_glim_required(data):
+    if not data.fenotipos:
+        raise ValidationError(
+            ">=1 fenotifico e >=1 etiologico obrigatorios",
+            "errors.glimInsufficient",
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+
+    if not data.etiologias:
+        raise ValidationError(
+            ">=1 fenotifico e >=1 etiologico obrigatorios",
+            "errors.glimInsufficient",
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+
+
+@has_permission(Permission.WRITE_NUTRITIONAL)
+def save_glim(nratendimento: int, data, idusuario: int):
+    patient = get_patients_by_nra(nratendimento)
+
+    if not patient:
+        raise ValidationError("Paciente não encontrado", "errors.notFound", status.HTTP_404_NOT_FOUND)
+
+    _validate_glim_required(data)
+
+    glim = nutritional_repository.upsert_glim(
+        nratendimento=nratendimento,
+        diagnostico=data.diagnostico_db,
+        fenotipos=data.fenotipos,
+        etiologias=data.etiologias,
+        observacao=data.observacao,
+        idusuario=idusuario,
+    )
+
+    d7 = None
+    d7_criado = False
+    if data.diagnostico_db != "nd":
+        d7 = nutritional_repository.upsert_d7(
+            nratendimento=nratendimento,
+            idusuario=idusuario,
+        )
+        d7_criado = True
+
+    return {
+        "id": glim.id,
+        "diagnostico": diagnostico_to_api(glim.diagnostico),
+        "fenotipos": glim.fenotipos or [],
+        "etiologias": glim.etiologias or [],
+        "d7_criado": d7_criado,
+        "d7_dt_prevista": _datetime_to_iso(d7.dt_prevista) if d7 else None,
+    }
+
+
+@has_permission(Permission.READ_PRESCRIPTION)
+def get_glim(nratendimento: int):
+    glim = nutritional_repository.get_latest_glim(nratendimento)
+
+    if glim is None:
+        raise ValidationError(
+            "Diagnostico GLIM nao encontrado",
+            "errors.notFound",
+            status.HTTP_404_NOT_FOUND,
+        )
+
+    return _glim_to_dict(glim)
 
 
 def get_patients_by_nra(nratendimento: int):
