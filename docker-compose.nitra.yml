@@ -33,7 +33,7 @@ services:
 
   db:
     image: postgres:16-alpine
-    container_name: nitra_db
+    container_name: nitra_db_ci
     environment:
       POSTGRES_DB: ${DB_NAME:-noharm}
       POSTGRES_USER: ${DB_USER:-postgres}
@@ -41,7 +41,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data_ci:/var/lib/postgresql/data
       - ${DATABASE_PATH:-./database}:/sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
@@ -51,7 +51,7 @@ services:
 
   db-init:
     image: postgres:16-alpine
-    container_name: nitra_db_init
+    container_name: nitra_db_init_ci
     depends_on:
       db:
         condition: service_healthy
@@ -71,23 +71,5 @@ services:
       psql -h db -U $${DB_USER} -d $${DB_NAME} -f /sql/noharm-insert.sql
       "
 
-  prometheus:
-    image: prom/prometheus
-    container_name: prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-    depends_on:
-      - api
-
-  grafana:
-    image: grafana/grafana
-    container_name: grafana
-    ports:
-      - "3001:3000"
-    depends_on:
-      - prometheus
-
 volumes:
-  postgres_data:
+  postgres_data_ci:
