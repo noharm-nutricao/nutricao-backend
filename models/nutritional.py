@@ -115,7 +115,7 @@ class NutritionalTriagem(db.Model):
     updated_at = db.Column("updated_at", db.DateTime, nullable=True)
     updated_by = db.Column("updated_by", db.BigInteger, nullable=True)
 
-class NutrtionalAlert(db.Model):
+class NutritionalAlert(db.Model):
     __tablename__ = "nutricional_alerta"
 
     id = db.Column("id", db.Integer, primary_key=True)
@@ -124,7 +124,7 @@ class NutrtionalAlert(db.Model):
     descricao = db.Column("descricao", postgresql.TEXT, nullable=True)
     severidade = db.Column("severidade", db.String, nullable=True)
     ativo = db.Column("ativo", db.Boolean, nullable=True)
-    created_at = db.Column("created_at", db.DateTime, nullable=True)
-    reconhecido = db.Column("reconhecido", db.Boolean, nullable=True)
-    reconhecido_por = db.Column("reconhecido_por", db.Integer, nullable=False)
+    reconhecido = db.Column("reconhecido", db.Boolean, default=False)
+    reconhecido_por = db.Column("reconhecido_por", db.Integer, db.ForeignKey("public.usuario.idusuario"), nullable=True)
     reconhecido_at = db.Column("reconhecido_at", db.DateTime, nullable=True)
+    created_at = db.Column("created_at", db.DateTime, nullable=True)

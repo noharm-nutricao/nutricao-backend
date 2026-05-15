@@ -3,6 +3,7 @@
 This module defines configuration classes for different environments
 (development, production, testing).
 """
+import os
 
 from config import Config
 from models.enums import NoHarmENV
@@ -64,6 +65,19 @@ class TestConfig(BaseConfig):
     DEBUG = True
     CORS_ORIGINS = [Config.MAIL_HOST, "http://localhost:3000"]
     SQLALCHEMY_DATABASE_URI = "postgresql://postgres@db:5432/noharm"
+    SQLALCHEMY_BINDS = {"report": "postgresql://postgres@localhost/noharm"}
+
+
+    class TestConfig(BaseConfig):
+        """Test environment configuration."""
+
+    TESTING = True
+    DEBUG = True
+    CORS_ORIGINS = [Config.MAIL_HOST, "http://localhost:3000"]
+    SQLALCHEMY_DATABASE_URI = os.environ.get(
+        "DATABASE_URL",
+        "postgresql://postgres@localhost:5432/noharm"
+    )
     SQLALCHEMY_BINDS = {"report": "postgresql://postgres@localhost/noharm"}
 
 
