@@ -1,0 +1,95 @@
+# docker-compose.ci.yml
+
+services:
+  api:
+    build: .
+    container_name: flask-api-ci
+    entrypoint: []
+    command: >
+      sh -c "python -m flask --app app run --host=0.0.0.0 --port=5000"
+    ports:
+      - "5000:5000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DEBUG_METRICS: "1"
+
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-noharm}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+
+      POTGRESQL_CONNECTION_STRING: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@db:5432/${DB_NAME:-noharm}
+      REPORT_CONNECTION_STRING: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@db:5432/${DB_NAME:-noharm}
+
+      FLASK_ENV: development
+      FLASK_DEBUG: "1"
+
+    depends_on:
+      db:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+
+  db:
+    image: postgres:16-alpine
+    container_name: nitra_db_ci
+    environment:
+      POSTGRES_DB: ${DB_NAME:-noharm}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_ci:/var/lib/postgresql/data
+      - ${DATABASE_PATH:-./database}:/sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  db-init:
+    image: postgres:16-alpine
+    container_name: nitra_db_init_ci
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_NAME: ${DB_NAME:-noharm}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      PGPASSWORD: ${DB_PASSWORD:-postgres}
+    volumes:
+      - ${DATABASE_PATH:-./database}:/sql
+    entrypoint: >
+      sh -c "
+      psql -h db -U $${DB_USER} -d $${DB_NAME} -f /sql/noharm-public.sql &&
+      psql -h db -U $${DB_USER} -d $${DB_NAME} -f /sql/noharm-create.sql &&
+      psql -h db -U $${DB_USER} -d $${DB_NAME} -f /sql/noharm-newuser.sql &&
+      psql -h db -U $${DB_USER} -d $${DB_NAME} -f /sql/noharm-triggers.sql &&
+      psql -h db -U $${DB_USER} -d $${DB_NAME} -f /sql/noharm-insert.sql
+      "
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus-ci
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    depends_on:
+      - api
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana-ci
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+
+volumes:
+  postgres_data_ci:

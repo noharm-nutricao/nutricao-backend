@@ -17,13 +17,13 @@ jobs:
           git clone https://github.com/noharm-nutricao/nutricao-database.git database
 
       - name: Build containers
-        run: docker compose -f docker-compose.nitra.yml build
+        run: docker compose -f docker-compose.ci.yml build
 
       - name: Subir stack
-        run: docker compose -f docker-compose.nitra.yml up -d
+        run: docker compose -f docker-compose.ci.yml up -d
 
       - name: Mostrar containers
-        run: docker compose -f docker-compose.nitra.yml ps
+        run: docker compose -f docker-compose.ci.yml ps
 
       - name: Aguardar API
         run: |
@@ -34,18 +34,18 @@ jobs:
             fi
 
             echo "Aguardando API subir... tentativa $i"
-            docker compose -f docker-compose.nitra.yml ps
+            docker compose -f docker-compose.ci.yml ps
             sleep 5
           done
 
           echo "API não respondeu. Exibindo logs:"
-          docker compose -f docker-compose.nitra.yml logs
+          docker compose -f docker-compose.ci.yml logs
           exit 1
 
       - name: Derrubar
         if: always()
-        run: docker compose -f docker-compose.nitra.yml down -v
+        run: docker compose -f docker-compose.ci.yml down -v
 
       - name: Logs em caso de falha
         if: failure()
-        run: docker compose -f docker-compose.nitra.yml logs
+        run: docker compose -f docker-compose.ci.yml logs
