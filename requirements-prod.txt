@@ -17,5 +17,4 @@ redis==5.1.1
 pydantic==2.9.2
 strands-agents==1.1.0
 prometheus-flask-exporter==0.23.0
-APScheduler==3.10.4
 

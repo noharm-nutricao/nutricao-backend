@@ -65,9 +65,4 @@ def create_app(config_name=None):
     # Configure security headers
     configure_security_headers(app)
 
-    # Start periodic nutritional score recalculation job (US-BE-06)
-    from services.nutritional.nutritional_job_service import init_scheduler
-
-    init_scheduler(app)
-
     return app
