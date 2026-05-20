@@ -96,12 +96,12 @@ def get_patients(request_data: NutritionalPatientsRequest):
                 "glim_fen": glim_fen,
                 "glim_etiol": glim_etiol,
                 "inst": [],  # from demo.nutricional_alerta - empty for now
-                # "conduta": row.conduta,
+                "conduta": row.conduta,
                 "haval": haval,
                 "d7": d7,
                 "pri": idx,  # position in the priority queue
                 "sev": sev,
-                "hist": [],  # empty in this US
+                "hist": row.hist or [],
             }
         )
 
