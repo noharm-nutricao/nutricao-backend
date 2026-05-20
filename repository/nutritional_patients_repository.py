@@ -6,6 +6,7 @@ from models.appendix import Department, SegmentDepartment
 from models.enums import SegmentTypeEnum
 from models.main import db
 from models.nutritional import (
+    NutritionalAssessment,
     NutritionalScreening,
     NutritionalD7,
     NutritionalGlim,
@@ -88,6 +89,39 @@ def get_patients(setor=None, ala=None):
         .scalar_subquery()
     ).label("glim_etiol")
 
+    # conduta — text of the most recent assessment
+    conduta_subq = (
+        db.session.query(NutritionalAssessment.conduta)
+        .filter(NutritionalAssessment.nratendimento == Patient.admissionNumber)
+        .correlate(Patient)
+        .order_by(NutritionalAssessment.created_at.desc())
+        .limit(1)
+        .scalar_subquery()
+    ).label("conduta")
+
+    # hist — JSON array of the last 10 assessments, most recent first
+    _hist_rows = (
+        db.session.query(
+            func.json_build_object(
+                "h", func.to_char(NutritionalAssessment.created_at, "DD/MM HH24:MI"),
+                "p", literal("Nutr."),
+                "c", NutritionalAssessment.conduta,
+                "freq", NutritionalAssessment.frequencia,
+                "ing", NutritionalAssessment.ingestao,
+            ).label("entry")
+        )
+        .filter(NutritionalAssessment.nratendimento == Patient.admissionNumber)
+        .correlate(Patient)
+        .order_by(NutritionalAssessment.created_at.desc())
+        .limit(10)
+        .subquery("hist_rows")
+    )
+
+    hist_subq = (
+        db.session.query(func.json_agg(_hist_rows.c.entry))
+        .scalar_subquery()
+    ).label("hist")
+
     # campo1 — NRS-2002 score fields from latest NRS2002 screening row
     nrs_data_subq = (
         db.session.query(
@@ -149,6 +183,8 @@ def get_patients(setor=None, ala=None):
             glim_etiol_subq,
             nrs_data_subq,
             mnutric_data_subq,
+            conduta_subq,
+            hist_subq,
         )
         .select_from(Patient)
         .outerjoin(
