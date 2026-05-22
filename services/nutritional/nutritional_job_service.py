@@ -86,7 +86,7 @@ def _recalculate_schema(schema: str) -> tuple:
                     schema,
                 )
 
-            nutritional_nrs_service.recalculate_nrs(patient_ns)
+            nutritional_nrs_service.recalculate_nrs(patient_ns, is_icu=patient_is_icu)
             logger.info(
                 "NRS-2002 recalculado nratendimento=%s schema=%s",
                 patient.nratendimento,
