@@ -11,8 +11,6 @@ import threading
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 import services.nutritional.nutritional_job_service as job_service
 from mobile import app as flask_app
 
