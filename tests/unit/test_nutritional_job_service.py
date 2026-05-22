@@ -14,10 +14,23 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import services.nutritional.nutritional_job_service as job_service
+from mobile import app as flask_app
 
 
-def _make_patient(nratendimento, is_icu):
-    return SimpleNamespace(nratendimento=nratendimento, is_icu=is_icu)
+def _make_patient(nratendimento, is_icu, tp_segmento=None, dtnascimento=None, idcid=None):
+    return SimpleNamespace(
+        nratendimento=nratendimento,
+        is_icu=is_icu,
+        tp_segmento=tp_segmento,
+        dtnascimento=dtnascimento,
+        idcid=idcid,
+    )
+
+
+def _icu_side_effect(patients):
+    """Returns is_uti_wrapper side_effect that mirrors patient.is_icu by nratendimento."""
+    m = {p.nratendimento: p.is_icu for p in patients}
+    return lambda n, **kw: m.get(n, False)
 
 
 # ---------------------------------------------------------------------------
@@ -31,36 +44,52 @@ class TestRecalculateNutritionalScores:
         patients = [_make_patient(1, False), _make_patient(2, True)]
 
         with patch(
+            "services.nutritional.nutritional_job_service._get_active_schemas",
+            return_value=["demo"],
+        ), patch(
             "services.nutritional.nutritional_job_service.nutritional_repository.get_active_admissions",
             return_value=patients,
+        ), patch(
+            "services.nutritional.nutritional_job_service.is_uti_wrapper",
+            side_effect=_icu_side_effect(patients),
         ), patch(
             "services.nutritional.nutritional_job_service.nutritional_patient_service.recalculate_mnutric",
             return_value={"total": 5},
         ), patch(
+            "services.nutritional.nutritional_job_service.nutritional_nrs_service.recalculate_nrs",
+        ), patch(
             "services.nutritional.nutritional_job_service.db.session.commit",
         ):
-            job_service.recalculate_nutritional_scores(MagicMock())
+            job_service.recalculate_nutritional_scores(flask_app)
 
     def test_tolerates_single_patient_failure(self):
         """An exception on one patient must not interrupt the rest of the batch."""
         patients = [
             _make_patient(1, False),
-            _make_patient(2, True),   # this one will fail
+            _make_patient(2, True),   # this one will fail (ICU → calls mnutric)
             _make_patient(3, False),
         ]
 
         with patch(
+            "services.nutritional.nutritional_job_service._get_active_schemas",
+            return_value=["demo"],
+        ), patch(
             "services.nutritional.nutritional_job_service.nutritional_repository.get_active_admissions",
             return_value=patients,
         ), patch(
+            "services.nutritional.nutritional_job_service.is_uti_wrapper",
+            side_effect=_icu_side_effect(patients),
+        ), patch(
             "services.nutritional.nutritional_job_service.nutritional_patient_service.recalculate_mnutric",
             side_effect=ValueError("Simulated error"),
+        ), patch(
+            "services.nutritional.nutritional_job_service.nutritional_nrs_service.recalculate_nrs",
         ), patch(
             "services.nutritional.nutritional_job_service.db.session.commit",
         ), patch(
             "services.nutritional.nutritional_job_service.db.session.rollback",
         ), patch.object(job_service.logger, "error") as mock_error:
-            job_service.recalculate_nutritional_scores(MagicMock())
+            job_service.recalculate_nutritional_scores(flask_app)
 
         assert mock_error.call_count == 1
 
@@ -68,15 +97,23 @@ class TestRecalculateNutritionalScores:
         patients = [_make_patient(10, True)]
 
         with patch(
+            "services.nutritional.nutritional_job_service._get_active_schemas",
+            return_value=["demo"],
+        ), patch(
             "services.nutritional.nutritional_job_service.nutritional_repository.get_active_admissions",
             return_value=patients,
+        ), patch(
+            "services.nutritional.nutritional_job_service.is_uti_wrapper",
+            side_effect=_icu_side_effect(patients),
         ), patch(
             "services.nutritional.nutritional_job_service.nutritional_patient_service.recalculate_mnutric",
             return_value=None,
         ), patch(
+            "services.nutritional.nutritional_job_service.nutritional_nrs_service.recalculate_nrs",
+        ), patch(
             "services.nutritional.nutritional_job_service.db.session.commit",
         ) as mock_commit, patch.object(job_service.logger, "error") as mock_error:
-            job_service.recalculate_nutritional_scores(MagicMock())
+            job_service.recalculate_nutritional_scores(flask_app)
 
         mock_commit.assert_not_called()
         assert any("retorno None" in str(call) for call in mock_error.call_args_list)
@@ -86,15 +123,23 @@ class TestRecalculateNutritionalScores:
         patients = [_make_patient(1, False), _make_patient(2, True)]
 
         with patch(
+            "services.nutritional.nutritional_job_service._get_active_schemas",
+            return_value=["demo"],
+        ), patch(
             "services.nutritional.nutritional_job_service.nutritional_repository.get_active_admissions",
             return_value=patients,
+        ), patch(
+            "services.nutritional.nutritional_job_service.is_uti_wrapper",
+            side_effect=_icu_side_effect(patients),
         ), patch(
             "services.nutritional.nutritional_job_service.nutritional_patient_service.recalculate_mnutric",
             return_value={"total": 5},
         ), patch(
+            "services.nutritional.nutritional_job_service.nutritional_nrs_service.recalculate_nrs",
+        ), patch(
             "services.nutritional.nutritional_job_service.db.session.commit",
         ), patch.object(job_service.logger, "info") as mock_info:
-            job_service.recalculate_nutritional_scores(MagicMock())
+            job_service.recalculate_nutritional_scores(flask_app)
 
         assert mock_info.call_count >= 2
         last_call = str(mock_info.call_args_list[-1])
@@ -103,10 +148,13 @@ class TestRecalculateNutritionalScores:
     def test_empty_admission_list_runs_without_error(self):
         """Job must complete normally when there are no active admissions."""
         with patch(
+            "services.nutritional.nutritional_job_service._get_active_schemas",
+            return_value=["demo"],
+        ), patch(
             "services.nutritional.nutritional_job_service.nutritional_repository.get_active_admissions",
             return_value=[],
         ):
-            job_service.recalculate_nutritional_scores(MagicMock())
+            job_service.recalculate_nutritional_scores(flask_app)
 
 
 # ---------------------------------------------------------------------------
