@@ -6,6 +6,7 @@ from models.appendix import Department, SegmentDepartment
 from models.enums import SegmentTypeEnum
 from models.main import db
 from models.nutritional import (
+    NutritionalAssessment,
     NutritionalScreening,
     NutritionalD7,
     NutritionalGlim,
@@ -51,6 +52,20 @@ def get_patients(setor=None, ala=None):
 
     d7_expr = (d7_subq > 0).label("d7")
 
+    # freq
+    last_assessment = (
+        db.session.query(
+            NutritionalAssessment.nratendimento,
+            NutritionalAssessment.frequencia,
+        )
+        .distinct(NutritionalAssessment.nratendimento)
+        .order_by(
+            NutritionalAssessment.nratendimento,
+            NutritionalAssessment.created_at.desc(),
+            NutritionalAssessment.id.desc(),
+        )
+        .subquery("last_assessment")
+    )
     # sev
     sev_subq = (
         db.session.query(NutritionalScreening.classificacao)
@@ -132,6 +147,7 @@ def get_patients(setor=None, ala=None):
     query = (
         db.session.query(
             Patient.admissionNumber.label("id"),
+            last_assessment.c.frequencia.label("freq_horas"),
             Patient.bed.label("leito"),
             ala_label,
             Patient.idDepartment.label("fksetor"),
@@ -152,6 +168,10 @@ def get_patients(setor=None, ala=None):
             mnutric_data_subq,
         )
         .select_from(Patient)
+        .outerjoin(
+            last_assessment,
+            last_assessment.c.nratendimento == Patient.admissionNumber,
+        )
         .outerjoin(
             SegmentDepartment,
             (SegmentDepartment.idDepartment == Patient.idDepartment)
@@ -189,5 +209,4 @@ def get_patients(setor=None, ala=None):
 
         else:
             query = query.filter(Segment.type.is_(None))
-
     return query.all()

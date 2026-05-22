@@ -41,14 +41,11 @@ def calculate_mnutric(patient, apache, sofa) -> dict:
     apache e sofa são os valores brutos informados pelo nutricionista.
     Seta mn_apache_manual=True e mn_sofa_manual=True via save_manual_mnutric.
     """
-    today        = datetime.now()
-    uti_days     = (today.date() - patient.utiEntryDate.date()).days
-
     mnutric_age       = _mnutric_age(patient.birthdate)
     mnutric_apache    = _mnutric_apache_ii(apache)
     mnutric_sofa      = _mnutric_sofa(sofa)
     mnutric_comorbity = _mnutric_comorbity(patient.id_icd)
-    mnutric_days_uti  = _mnutric_days_uti(uti_days)
+    mnutric_days_uti  = _mnutric_days_before_icu(patient)
     mnutric           = mnutric_age + mnutric_apache + mnutric_sofa + mnutric_comorbity + mnutric_days_uti
 
     result = {
@@ -110,11 +107,18 @@ def _mnutric_comorbity(comorbity) -> int:
         mnutric_comorbity = 1
     return mnutric_comorbity
 
-def _mnutric_days_uti(days_uti) -> int:
-    mnutric_days_uti = 0
-    if days_uti > 1:
-        mnutric_days_uti = 1
-    return mnutric_days_uti
+def _mnutric_days_before_icu(patient: Patient) -> int:
+    admission_date = getattr(patient, "admissionDate", None) or getattr(patient, "dtinternacao", None)
+    entry_date = (
+        getattr(patient, "lastTransferDate", None)
+        or getattr(patient, "utiEntryDate", None)
+        or getattr(patient, "dt_ultima_transferencia", None)
+        or admission_date
+    )
+    if admission_date is None or entry_date is None:
+        return 0
+    dias_antes_uti = (entry_date.date() - admission_date.date()).days
+    return 1 if dias_antes_uti >= 2 else 0
 
 def _mnutric_clasify(mnutric: int) -> str:
     if mnutric >= 0 and mnutric <= 2:
@@ -150,7 +154,7 @@ def recalculate_mnutric(patient):
         admissionNumber=admission_number,
         birthdate=birthdate,
         admissionDate=admission_date,
-        utiEntryDate=getattr(patient, "dt_ultima_transferencia", None) or admission_date,
+        utiEntryDate=getattr(patient, "lastTransferDate", None) or admission_date,
         id_icd=getattr(patient, "idcid", None) or '',
     )
 
@@ -162,16 +166,12 @@ def recalculate_mnutric(patient):
     apache = _restore_apache_ii_from_dimension(getattr(screening, "mn_apache", None)) if apache_manual else None
     sofa = _restore_sofa_from_dimension(getattr(screening, "mn_sofa", None)) if sofa_manual else None
 
-    today = datetime.now()
-    uti_entry = normalized.utiEntryDate
-    uti_days = (today.date() - uti_entry.date()).days if uti_entry else 0
-
     result = {
         "age":          _mnutric_age(normalized.birthdate),
         "apache":       _mnutric_apache_ii(apache) if apache is not None else None,
         "sofa":         _mnutric_sofa(sofa) if sofa is not None else None,
         "comorbity":    _mnutric_comorbity(normalized.id_icd),
-        "daysUTI":      _mnutric_days_uti(uti_days),
+        "daysUTI":      _mnutric_days_before_icu(normalized),
         "dados_incompletos": dados_incompletos,
         "total":        None,
         "classify":     None,

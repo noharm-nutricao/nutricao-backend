@@ -42,6 +42,7 @@ REQUIRED_FIELDS = {
     "d7",
     "pri",
     "sev",
+    "freq_horas",
     "hist",
 }
 
@@ -127,6 +128,13 @@ def _ensure_schema():
 
     for ddl in ddl_statements:
         session.execute(text(ddl))
+
+    session.execute(
+        text(
+            "ALTER TABLE demo.nutricional_avaliacao "
+            "ADD COLUMN IF NOT EXISTS frequencia VARCHAR(8)"
+        )
+    )
 
     session_commit()
 
@@ -496,6 +504,15 @@ def test_conduta_and_sev(client, analyst_headers):
     assert enf["sev"] == "bx"
 
 
+def test_freq_horas_mapping(client, analyst_headers):
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    data = response.get_json()["data"]
+
+    uti = _find_patient(data, _ADM_ACTIVE_UTI)
+    assert uti is not None
+    assert uti["freq_horas"] == 24
+
+
 def test_default_null_fields(client, analyst_headers):
     response = client.get(ENDPOINT, headers=analyst_headers)
     data = response.get_json()["data"]
@@ -654,6 +671,7 @@ def test_field_types_validation(client, analyst_headers):
     assert isinstance(uti["idade"], int)
     assert isinstance(uti["dias"], int)
     assert isinstance(uti["pri"], int)
+    assert isinstance(uti["freq_horas"], int)
 
     assert isinstance(uti["leito"], str)
     assert isinstance(uti["ala"], str)

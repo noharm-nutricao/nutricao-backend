@@ -1,14 +1,18 @@
 """Unit tests for nutritional_patients_service helper functions."""
 
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 import pytest
 
-from services.nutritional.nutritional_active_patients_service import (
-    _calculate_age,
-    _calculate_days,
-    _calculate_imc,
-)
+from models.enums import SegmentTypeEnum
+from models.requests.nutritional_patients_request import NutritionalPatientsRequest
+from services.nutritional import nutritional_active_patients_service as service
+
+
+def _call_get_patients(request_data):
+    wrapped = getattr(service.get_patients, "__wrapped__", service.get_patients)
+    return wrapped(request_data=request_data)
 
 @pytest.mark.parametrize(
     "birthdate, now, expected",
@@ -27,7 +31,7 @@ from services.nutritional.nutritional_active_patients_service import (
 )
 def test_calculate_age(birthdate, now, expected):
     """_calculate_age retorna idade em anos completos"""
-    assert _calculate_age(birthdate, now) == expected
+    assert service._calculate_age(birthdate, now) == expected
 
 
 @pytest.mark.parametrize(
@@ -45,7 +49,7 @@ def test_calculate_age(birthdate, now, expected):
 )
 def test_calculate_days(admission_date, now, expected):
     """_calculate_days retorna dias de internação"""
-    assert _calculate_days(admission_date, now) == expected
+    assert service._calculate_days(admission_date, now) == expected
 
 
 @pytest.mark.parametrize(
@@ -69,9 +73,173 @@ def test_calculate_days(admission_date, now, expected):
 )
 def test_calculate_imc(peso, altura, expected):
     """_calculate_imc calcula IMC corretamente (peso kg, altura cm)"""
-    result = _calculate_imc(peso, altura)
+    result = service._calculate_imc(peso, altura)
     if expected is None:
         assert result is None
     else:
         assert result == expected
+
+
+def test_get_patients_maps_icu_row_and_mnutric_payload(monkeypatch):
+    fixed_now = datetime(2026, 4, 10, tzinfo=timezone.utc)
+
+    class FrozenDateTime:
+        @classmethod
+        def now(cls, tz=None):
+            return fixed_now if tz else fixed_now.replace(tzinfo=None)
+
+    row = SimpleNamespace(
+        id=101,
+        leito="U-12",
+        ala="UTI",
+        fksetor=7,
+        nome_setor="UTI Adulto",
+        tp_segmento=SegmentTypeEnum.ICU.value,
+        dtinternacao=datetime(2026, 4, 8),
+        dtnascimento=datetime(1980, 4, 9),
+        peso=80.0,
+        altura=175.0,
+        haval=25.66,
+        d7=1,
+        sev=None,
+        freq_horas="24h",
+        glim_diag=None,
+        glim_fen=None,
+        glim_etiol=None,
+        nrs_data={
+            "nrs_total": 3,
+            "nrs_nut": 1,
+            "nrs_doenca": 1,
+            "nrs_idade": 1,
+        },
+        mnutric_data={
+            "mn_total": 6,
+            "mn_idade": 2,
+            "mn_apache": 1,
+            "mn_sofa": 1,
+            "mn_comor": 1,
+            "mn_dias": 1,
+            "mn_apache_manual": True,
+            "mn_sofa_manual": True,
+        },
+    )
+
+    captured = {}
+
+    def fake_get_patients(*, setor, ala):
+        captured["setor"] = setor
+        captured["ala"] = ala
+        return [row]
+
+    monkeypatch.setattr(service, "datetime", FrozenDateTime)
+    monkeypatch.setattr(
+        service.nutritional_patients_repository,
+        "get_patients",
+        fake_get_patients,
+    )
+
+    request_data = NutritionalPatientsRequest(setor=7, ala="UTI")
+    result = _call_get_patients(request_data=request_data)
+
+    assert captured == {"setor": 7, "ala": "UTI"}
+    assert len(result) == 1
+
+    patient = result[0]
+    assert patient["id"] == 101
+    assert patient["protocolo"] == "MNUTRIC"
+    assert patient["idade"] == 46
+    assert patient["dias"] == 2
+    assert patient["imc"] == 26.1
+    assert patient["haval"] == 25.7
+    assert patient["d7"] is True
+    assert patient["sev"] == "bx"
+    assert patient["freq_horas"] == 24
+    assert patient["glim_diag"] is None
+    assert patient["glim_fen"] == []
+    assert patient["glim_etiol"] == []
+    assert patient["pri"] == 1
+    assert patient["campo1"] == {
+        "mnutric_total": 6,
+        "mn_dims": {
+            "idade": 2,
+            "apache": 1,
+            "sofa": 1,
+            "comor": 1,
+            "dias": 1,
+        },
+        "nrs_total": 3,
+        "nrs_dims": {
+            "nut": 1,
+            "doenca": 1,
+            "idade": 1,
+        },
+    }
+
+
+def test_get_patients_maps_nrs_row_defaults_and_unknown_frequency(monkeypatch):
+    fixed_now = datetime(2026, 4, 10, tzinfo=timezone.utc)
+
+    class FrozenDateTime:
+        @classmethod
+        def now(cls, tz=None):
+            return fixed_now if tz else fixed_now.replace(tzinfo=None)
+
+    row = SimpleNamespace(
+        id=202,
+        leito="C-03",
+        ala="Clínica",
+        fksetor=2,
+        nome_setor="Clínica Médica",
+        tp_segmento=None,
+        dtinternacao=None,
+        dtnascimento=None,
+        peso=None,
+        altura=None,
+        haval=None,
+        d7=None,
+        sev="al",
+        freq_horas="10h",
+        glim_diag="moderada",
+        glim_fen=["perda_peso"],
+        glim_etiol=["inflamacao"],
+        nrs_data={
+            "nrs_total": 4,
+            "nrs_nut": 2,
+            "nrs_doenca": 1,
+            "nrs_idade": 1,
+        },
+        mnutric_data=None,
+    )
+
+    monkeypatch.setattr(service, "datetime", FrozenDateTime)
+    monkeypatch.setattr(
+        service.nutritional_patients_repository,
+        "get_patients",
+        lambda *, setor, ala: [row],
+    )
+
+    request_data = NutritionalPatientsRequest()
+    result = _call_get_patients(request_data=request_data)
+
+    assert len(result) == 1
+    patient = result[0]
+    assert patient["protocolo"] == "NRS2002"
+    assert patient["idade"] is None
+    assert patient["dias"] is None
+    assert patient["imc"] is None
+    assert patient["haval"] is None
+    assert patient["d7"] is False
+    assert patient["sev"] == "al"
+    assert patient["freq_horas"] is None
+    assert patient["glim_diag"] == "moderada"
+    assert patient["glim_fen"] == ["perda_peso"]
+    assert patient["glim_etiol"] == ["inflamacao"]
+    assert patient["campo1"] == {
+        "nrs_total": 4,
+        "nrs_dims": {
+            "nut": 2,
+            "doenca": 1,
+            "idade": 1,
+        },
+    }
 
