@@ -29,6 +29,7 @@ test-cov:
 
 ## Setup DB with Flyway migrations (same as CI) — destroys existing data
 test-ci-setup:
+	git submodule update --init database
 	$(COMPOSE) down -v
 	$(COMPOSE) up -d
 	until $(COMPOSE) exec db pg_isready -U postgres -d noharm 2>/dev/null; do sleep 1; done

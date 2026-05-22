@@ -3,7 +3,7 @@
 from datetime import datetime as real_datetime
 from datetime import timedelta
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -318,3 +318,153 @@ def test_recalculate_mnutric_returns_dados_incompletos_when_screening_is_missing
     assert result["classify"] is None
     assert result["apache"] is None
     assert result["sofa"] is None
+
+
+# ---------------------------------------------------------------------------
+# _restore_apache_ii_from_dimension
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "score,expected",
+    [
+        (None, None),
+        (0, 0),
+        (1, 15),
+        (2, 20),
+        (3, 28),
+        (10, 10),  # unknown → passthrough
+    ],
+)
+def test_restore_apache_ii_from_dimension(score, expected):
+    assert service._restore_apache_ii_from_dimension(score) == expected
+
+
+# ---------------------------------------------------------------------------
+# _restore_sofa_from_dimension
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "score,expected",
+    [
+        (None, None),
+        (0, 0),
+        (1, 6),
+        (2, 10),
+        (5, 5),  # unknown → passthrough
+    ],
+)
+def test_restore_sofa_from_dimension(score, expected):
+    assert service._restore_sofa_from_dimension(score) == expected
+
+
+# ---------------------------------------------------------------------------
+# calculate_mnutric: save error handling
+# ---------------------------------------------------------------------------
+
+
+def test_calculate_mnutric_logs_error_and_still_returns_when_save_fails():
+    patient = SimpleNamespace(
+        admissionNumber=42,
+        birthdate=real_datetime(1970, 1, 1),
+        id_icd="",
+        admissionDate=FIXED_NOW,
+        utiEntryDate=FIXED_NOW,
+    )
+
+    with patch(
+        "services.nutritional.nutritional_patient_service.save_manual_mnutric",
+        side_effect=RuntimeError("DB error"),
+    ):
+        result = service.calculate_mnutric(patient, apache=0, sofa=0)
+
+    assert result is not None
+    assert "total" in result
+
+
+def test_calculate_mnutric_skips_save_when_admission_number_is_none():
+    patient = SimpleNamespace(
+        admissionNumber=None,
+        birthdate=real_datetime(1970, 1, 1),
+        id_icd="",
+        admissionDate=FIXED_NOW,
+        utiEntryDate=FIXED_NOW,
+    )
+
+    with patch(
+        "services.nutritional.nutritional_patient_service.save_manual_mnutric",
+    ) as mock_save:
+        service.calculate_mnutric(patient, apache=0, sofa=0)
+
+    mock_save.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# get_patients: exception path (bypass @has_permission via __wrapped__)
+# ---------------------------------------------------------------------------
+
+
+def test_get_patients_raises_when_repository_fails():
+    with patch(
+        "services.nutritional.nutritional_patient_service.nutritional_repository.get_patients_repository",
+        side_effect=RuntimeError("DB down"),
+    ):
+        with pytest.raises(Exception, match="Estamos com problemas"):
+            service.get_patients.__wrapped__()
+
+
+# ---------------------------------------------------------------------------
+# _handle_d7_closure
+# ---------------------------------------------------------------------------
+
+
+class TestHandleD7Closure:
+    def test_non_d7_prox_visita_does_nothing(self):
+        with patch(
+            "services.nutritional.nutritional_patient_service.nutritional_repository.get_active_d7"
+        ) as mock_get, patch(
+            "services.nutritional.nutritional_patient_service.nutritional_repository.create_d7"
+        ) as mock_create:
+            service._handle_d7_closure(nratendimento=1, prox_visita="24h", idusuario=1)
+
+        mock_get.assert_not_called()
+        mock_create.assert_not_called()
+
+    def test_d7_prox_visita_closes_active_and_creates_new(self):
+        mock_active_d7 = MagicMock()
+        mock_active_d7.id = 99
+
+        with patch(
+            "services.nutritional.nutritional_patient_service.nutritional_repository.get_active_d7",
+            return_value=mock_active_d7,
+        ) as mock_get, patch(
+            "services.nutritional.nutritional_patient_service.nutritional_repository.close_d7"
+        ) as mock_close, patch(
+            "services.nutritional.nutritional_patient_service.nutritional_repository.create_d7"
+        ) as mock_create:
+            service._handle_d7_closure(nratendimento=1, prox_visita="D7", idusuario=7)
+
+        mock_get.assert_called_once_with(1)
+        mock_close.assert_called_once_with(id=99, nratendimento=1)
+        mock_create.assert_called_once()
+        _, kwargs = mock_create.call_args
+        assert kwargs["nratendimento"] == 1
+        assert kwargs["idusuario"] == 7
+
+    def test_d7_prox_visita_creates_new_when_no_active_d7(self):
+        with patch(
+            "services.nutritional.nutritional_patient_service.nutritional_repository.get_active_d7",
+            return_value=None,
+        ), patch(
+            "services.nutritional.nutritional_patient_service.nutritional_repository.close_d7"
+        ) as mock_close, patch(
+            "services.nutritional.nutritional_patient_service.nutritional_repository.create_d7"
+        ) as mock_create:
+            service._handle_d7_closure(nratendimento=2, prox_visita="D7", idusuario=5)
+
+        mock_close.assert_not_called()
+        mock_create.assert_called_once()
+        _, kwargs = mock_create.call_args
+        assert kwargs["nratendimento"] == 2
+        assert kwargs["idusuario"] == 5

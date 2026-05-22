@@ -148,7 +148,11 @@ def test_get_patients_builds_last_assessment_subquery(monkeypatch):
     last_assessment_query.distinct.assert_called_once_with(
         NutritionalAssessment.nratendimento
     )
-    assert last_assessment_query.order_by.call_count == 1
+    order_by_args = last_assessment_query.order_by.call_args.args
+    assert len(order_by_args) == 3
+    _assert_same_column(order_by_args[0], NutritionalAssessment.nratendimento)
+    _assert_same_column(order_by_args[1].element, NutritionalAssessment.created_at)
+    _assert_same_column(order_by_args[2].element, NutritionalAssessment.id)
     last_assessment_query.subquery.assert_called_once_with("last_assessment")
 
 

@@ -48,13 +48,13 @@ jobs:
           docker compose -f docker-compose.ci.yml logs
           exit 1
 
-      - name: Derrubar
-        if: always()
-        run: docker compose -f docker-compose.ci.yml down -v
-
       - name: Logs em caso de falha
         if: failure()
         run: docker compose -f docker-compose.ci.yml logs
+
+      - name: Derrubar
+        if: always()
+        run: docker compose -f docker-compose.ci.yml down -v
 
   sonar:
     runs-on: ubuntu-latest
@@ -106,7 +106,7 @@ jobs:
           python -m pytest tests/unit/test_nutritional*.py tests/integration/test_nutritional*.py --cov=services/nutritional --cov=routes/nutritional --cov-report=xml:coverage.xml
 
       - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
+        uses: SonarSource/sonarcloud-github-action@ba3875ecf642b2129de2b589510c81a8b53dbf4e  # master 2026-05-22
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

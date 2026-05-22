@@ -27,43 +27,6 @@ def _make_patient(nratendimento, is_icu, tp_segmento=None):
     )
 
 
-def _common_patches(patients, mnutric_side_effect=None):
-    """Return context-manager patches shared by most recalculate tests."""
-    mnutric_kwargs = (
-        {"side_effect": mnutric_side_effect}
-        if mnutric_side_effect is not None
-        else {"return_value": {"total": 5}}
-    )
-    return [
-        patch(
-            "services.nutritional.nutritional_job_service._get_active_schemas",
-            return_value=["demo"],
-        ),
-        patch(
-            "services.nutritional.nutritional_job_service.nutritional_repository.get_active_admissions",
-            return_value=patients,
-        ),
-        patch(
-            "services.nutritional.nutritional_job_service.dbSession.setSchema",
-        ),
-        patch(
-            "services.nutritional.nutritional_job_service.is_uti_wrapper",
-            side_effect=lambda nra, **_: any(
-                p.nratendimento == nra and p.is_icu for p in patients
-            ),
-        ),
-        patch(
-            "services.nutritional.nutritional_job_service.nutritional_patient_service.recalculate_mnutric",
-            **mnutric_kwargs,
-        ),
-        patch(
-            "services.nutritional.nutritional_job_service.nutritional_nrs_service.recalculate_nrs",
-        ),
-        patch("services.nutritional.nutritional_job_service.db.session.commit"),
-        patch("services.nutritional.nutritional_job_service.db.session.rollback"),
-    ]
-
-
 # ---------------------------------------------------------------------------
 # recalculate_nutritional_scores
 # ---------------------------------------------------------------------------
@@ -201,21 +164,37 @@ class TestRecalculateNutritionalScores:
         """Patients with is_icu=True must enter the MNUTRIC branch (not NRS)."""
         icu_patient = _make_patient(10, True)
         non_icu_patient = _make_patient(20, False)
-        visited = []
-
-        def patched():
-            patients = [icu_patient, non_icu_patient]
-            for p in patients:
-                visited.append(("MNUTRIC" if p.is_icu else "NRS2002", p.nratendimento))
+        patients = [icu_patient, non_icu_patient]
+        app = MagicMock()
 
         with patch(
+            "services.nutritional.nutritional_job_service._get_active_schemas",
+            return_value=["demo"],
+        ), patch(
             "services.nutritional.nutritional_job_service.nutritional_repository.get_active_admissions",
-            return_value=[icu_patient, non_icu_patient],
+            return_value=patients,
+        ), patch(
+            "services.nutritional.nutritional_job_service.dbSession.setSchema",
+        ), patch(
+            "services.nutritional.nutritional_job_service.is_uti_wrapper",
+            side_effect=lambda nra, **_: any(
+                p.nratendimento == nra and p.is_icu for p in patients
+            ),
+        ), patch(
+            "services.nutritional.nutritional_job_service.nutritional_patient_service.recalculate_mnutric",
+            return_value={"total": 5},
+        ) as mock_mnutric, patch(
+            "services.nutritional.nutritional_job_service.nutritional_nrs_service.recalculate_nrs",
+        ) as mock_nrs, patch(
+            "services.nutritional.nutritional_job_service.db.session.commit",
+        ), patch(
+            "services.nutritional.nutritional_job_service.db.session.rollback",
         ):
-            patched()
+            job_service.recalculate_nutritional_scores(app)
 
-        assert visited[0] == ("MNUTRIC", 10)
-        assert visited[1] == ("NRS2002", 20)
+        assert mock_mnutric.call_count == 1
+        assert mock_mnutric.call_args.args[0] is icu_patient
+        assert mock_nrs.call_count == 2
 
     def test_logs_summary_after_run(self):
         """A summary info log must be emitted at the end of each execution."""
