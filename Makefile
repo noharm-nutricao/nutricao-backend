@@ -1,4 +1,4 @@
-.PHONY: test-setup test test-unit test-integration test-file test-cov test-nitra db-start db-stop db-reset
+.PHONY: test-setup test test-unit test-integration test-file test-cov test-nitra test-ci-setup test-ci db-start db-stop db-reset
 
 COMPOSE = docker compose -f docker-compose.test.yml
 
@@ -26,6 +26,21 @@ test-file:
 ## Run tests with coverage report
 test-cov:
 	ENV=test python -m pytest --cov=. --cov-report=html
+
+## Setup DB with Flyway migrations (same as CI) — destroys existing data
+test-ci-setup:
+	$(COMPOSE) down -v
+	$(COMPOSE) up -d
+	until $(COMPOSE) exec db pg_isready -U postgres -d noharm 2>/dev/null; do sleep 1; done
+	psql postgresql://postgres@localhost/noharm -f database/migrations/flyway/V1__create_public_schema.sql -v ON_ERROR_STOP=1
+	psql postgresql://postgres@localhost/noharm -f database/migrations/flyway/V2__create_demo_schema.sql -v ON_ERROR_STOP=1
+	psql postgresql://postgres@localhost/noharm -f database/migrations/flyway/V3__create_triggers.sql -v ON_ERROR_STOP=1
+	psql postgresql://postgres@localhost/noharm -f database/migrations/flyway/V4__seed_data.sql -v ON_ERROR_STOP=1
+	psql postgresql://postgres@localhost/noharm -f database/migrations/flyway/V5__nitra_test_seed.sql -v ON_ERROR_STOP=1
+
+## Run nutritional tests with CI database (run make test-ci-setup first)
+test-ci:
+	ENV=test python -m pytest tests/unit/test_nutritional*.py tests/integration/test_nutritional*.py --cov=services/nutritional --cov-report=xml:coverage.xml -v
 
 ## Run nutritional tests against nitra_db (docker-compose.nitra.yml must be up)
 test-nitra:

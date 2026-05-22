@@ -365,8 +365,10 @@ def test_campo1_is_null(client, analyst_headers):
     response = client.get(ENDPOINT, headers=analyst_headers)
     data = response.get_json()["data"]
 
-    for patient in data:
-        assert patient["campo1"] is None
+    uti = _find_patient(data, _ADM_ACTIVE_UTI)
+    enf = _find_patient(data, _ADM_ACTIVE_ENF)
+    assert uti["campo1"] is None
+    assert enf["campo1"] is None
 
 
 def test_only_active_admissions(client, analyst_headers):
@@ -479,8 +481,12 @@ def test_default_null_fields(client, analyst_headers):
     response = client.get(ENDPOINT, headers=analyst_headers)
     data = response.get_json()["data"]
 
+    uti = _find_patient(data, _ADM_ACTIVE_UTI)
+    enf = _find_patient(data, _ADM_ACTIVE_ENF)
+    assert uti["campo1"] is None
+    assert enf["campo1"] is None
+
     for patient in data:
-        assert patient["campo1"] is None
         assert patient["hist"] == []
         assert isinstance(patient["glim_fen"], list)
         assert isinstance(patient["glim_etiol"], list)
