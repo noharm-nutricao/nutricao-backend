@@ -170,17 +170,16 @@ class TestInitScheduler:
         app = MagicMock()
         app.debug = False
 
-        before = {t.name for t in threading.enumerate()}
-
         with patch(
             "services.nutritional.nutritional_job_service.Config"
-        ) as mock_config:
+        ) as mock_config, patch(
+            "services.nutritional.nutritional_job_service.threading.Thread"
+        ) as mock_thread_cls:
             mock_config.SCHEDULER_ENABLED = False
 
             job_service.init_scheduler(app)
 
-        after = {t.name for t in threading.enumerate()}
-        assert "nutritional-recalc" not in after - before
+        mock_thread_cls.assert_not_called()
 
     def test_starts_daemon_thread_when_enabled(self):
         """Scheduler must launch a daemon thread named 'nutritional-recalc'."""
