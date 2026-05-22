@@ -78,6 +78,8 @@ def _ensure_schema():
             idnutricional_avaliacao BIGSERIAL PRIMARY KEY,
             nratendimento BIGINT NOT NULL,
             conduta TEXT,
+            frequencia VARCHAR(32),
+            ingestao INTEGER,
             created_at TIMESTAMP NOT NULL DEFAULT NOW(),
             created_by BIGINT NOT NULL DEFAULT 1
         )""",
@@ -117,6 +119,14 @@ def _ensure_schema():
 
     for ddl in ddl_statements:
         session.execute(text(ddl))
+
+    # Ensure columns added after initial DDL exist (idempotent)
+    session.execute(text(
+        "ALTER TABLE demo.nutricional_avaliacao ADD COLUMN IF NOT EXISTS frequencia VARCHAR(32)"
+    ))
+    session.execute(text(
+        "ALTER TABLE demo.nutricional_avaliacao ADD COLUMN IF NOT EXISTS ingestao INTEGER"
+    ))
 
     session_commit()
 
@@ -476,7 +486,7 @@ def test_default_null_fields(client, analyst_headers):
 
     for patient in data:
         assert patient["campo1"] is None
-        assert patient["hist"] == []
+        assert isinstance(patient["hist"], list)
         assert isinstance(patient["glim_fen"], list)
         assert isinstance(patient["glim_etiol"], list)
         assert isinstance(patient["inst"], list)
@@ -700,12 +710,13 @@ def test_dieta_npo_null_this_us(client, analyst_headers):
         assert patient["npo"] is None
 
 
-def test_hist_empty_this_us(client, analyst_headers):
+def test_hist_empty_when_no_assessment(client, analyst_headers):
     response = client.get(ENDPOINT, headers=analyst_headers)
     data = response.get_json()["data"]
 
-    for patient in data:
-        assert patient["hist"] == []
+    enf = _find_patient(data, _ADM_ACTIVE_ENF)
+    assert enf is not None
+    assert enf["hist"] == []
 
 
 def test_inst_empty_this_us(client, analyst_headers):
