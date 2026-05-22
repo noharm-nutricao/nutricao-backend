@@ -25,7 +25,7 @@ def _make_subquery_builder(scalar_result):
 
 
 def _make_last_assessment_builder():
-    """Create a fluent mock for last_assessment grouped subquery."""
+    """Create a fluent mock for last_assessment ordered subquery."""
     grouped = MagicMock()
     grouped.distinct.return_value = grouped
     grouped.group_by.return_value = grouped

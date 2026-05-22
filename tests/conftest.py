@@ -109,10 +109,19 @@ def _cleanup():
     )
 
     session.execute(
-        text("DELETE FROM demo.nutricional_nrs WHERE nratendimento >= 100000")
+        text(
+            """DO $$ BEGIN
+                IF EXISTS (SELECT 1 FROM information_schema.tables
+                           WHERE table_schema='demo' AND table_name='nutricional_nrs') THEN
+                    DELETE FROM demo.nutricional_nrs WHERE nratendimento >= 100000;
+                END IF;
+                IF EXISTS (SELECT 1 FROM information_schema.tables
+                           WHERE table_schema='demo' AND table_name='triagem') THEN
+                    DELETE FROM demo.triagem WHERE nratendimento >= 100000;
+                END IF;
+            END $$"""
+        )
     )
-    if session.execute(text("SELECT to_regclass('demo.triagem')")).scalar() is not None:
-        session.execute(text("DELETE FROM demo.triagem WHERE nratendimento >= 100000"))
 
     session_commit()
     pass

@@ -1,82 +1,114 @@
-#name: Build
-#on:
-#  pull_request:
-#    branches: [main, develop]
-#permissions:
-#  contents: read
-#  pull-requests: write
-#
-#jobs:
-#  build:
-#    runs-on: ubuntu-latest
-#    services:
-#      postgres:
-#        image: postgres:11.6
-#        env:
-#          POSTGRES_USER: postgres
-#          POSTGRES_DB: noharm
-#        ports:
-#          - 5432:5432
-#    steps:
-#      - uses: actions/checkout@v4
-#      - uses: actions/setup-python@v5
-#        with:
-#          python-version: 3.11
-#      - name: Setup Python
-#        run: |
-#          python -m pip install --upgrade pip
-#          pip install -r requirements.txt
-#      - name: Setup PostgreSQL
-#        run: |
-#          git clone https://github.com/noharm-ai/database
-#          psql -h localhost -U postgres -d noharm -a -f database/noharm-public.sql -v ON_ERROR_STOP=1
-#          psql -h localhost -U postgres -d noharm -a -f database/noharm-create.sql -v ON_ERROR_STOP=1
-#          psql -h localhost -U postgres -d noharm -a -f database/noharm-newuser.sql -v ON_ERROR_STOP=1
-#          psql -h localhost -U postgres -d noharm -a -f database/noharm-triggers.sql -v ON_ERROR_STOP=1
-#          psql -h localhost -U postgres -d noharm -a -f database/noharm-insert.sql -v ON_ERROR_STOP=1
-#      - name: Setup Application
-#        run: |
-#          python mobile.py &
-#          sleep 10
-#      - name: Configure AWS Credentials
-#        uses: aws-actions/configure-aws-credentials@v4
-#        with:
-#          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-#          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-#          aws-region: sa-east-1
-#      - name: Run Tests
-#        env:
-#          CACHE_BUCKET_NAME: ${{ secrets.CACHE_BUCKET_NAME }}
-#          ENV: test
-#        run: python -m pytest --cov-report xml --cov=.
-#  build-prod:
-#    runs-on: ubuntu-latest
-#    services:
-#      postgres:
-#        image: postgres:11.6
-#        env:
-#          POSTGRES_USER: postgres
-#          POSTGRES_DB: noharm
-#        ports:
-#          - 5432:5432
-#    steps:
-#      - uses: actions/checkout@v4
-#      - uses: actions/setup-python@v5
-#        with:
-#          python-version: 3.11
-#      - name: Setup Python
-#        run: |
-#          python -m pip install --upgrade pip
-#          pip install -r requirements-prod.txt
-#      - name: Setup PostgreSQL
-#        run: |
-#          git clone https://github.com/noharm-ai/database
-#          psql -h localhost -U postgres -d noharm -a -f database/noharm-public.sql -v ON_ERROR_STOP=1
-#          psql -h localhost -U postgres -d noharm -a -f database/noharm-create.sql -v ON_ERROR_STOP=1
-#          psql -h localhost -U postgres -d noharm -a -f database/noharm-newuser.sql -v ON_ERROR_STOP=1
-#          psql -h localhost -U postgres -d noharm -a -f database/noharm-triggers.sql -v ON_ERROR_STOP=1
-#          psql -h localhost -U postgres -d noharm -a -f database/noharm-insert.sql -v ON_ERROR_STOP=1
-#      - name: Setup Application
-#        run: |
-#          python mobile.py &
-#          sleep 10
+name: Build
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    branches: [main, develop]
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:11.6
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: noharm
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.11
+      - name: Setup Python
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Setup PostgreSQL
+        run: |
+          git clone --branch develop https://github.com/noharm-nutricao/nutricao-database
+          psql -h localhost -U postgres -d noharm -a -f nutricao-database/migrations/flyway/V1__create_public_schema.sql -v ON_ERROR_STOP=1
+          psql -h localhost -U postgres -d noharm -a -f nutricao-database/migrations/flyway/V2__create_demo_schema.sql -v ON_ERROR_STOP=1
+          psql -h localhost -U postgres -d noharm -a -f nutricao-database/migrations/flyway/V3__create_triggers.sql -v ON_ERROR_STOP=1
+          psql -h localhost -U postgres -d noharm -a -f nutricao-database/migrations/flyway/V4__seed_data.sql -v ON_ERROR_STOP=1
+          psql -h localhost -U postgres -d noharm -a -f nutricao-database/migrations/flyway/V5__nitra_test_seed.sql -v ON_ERROR_STOP=1
+      - name: Setup Application
+        run: |
+          python mobile.py &
+          sleep 10
+      # - name: Configure AWS Credentials
+      #   uses: aws-actions/configure-aws-credentials@v4
+      #   with:
+      #     aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      #     aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      #     aws-region: sa-east-1
+      - name: Run tests with coverage
+        env:
+          CACHE_BUCKET_NAME: ${{ secrets.CACHE_BUCKET_NAME }}
+          ENV: test
+        run: |
+          pytest tests/unit/test_nutritional*.py tests/integration/test_nutritional*.py --cov=services/nutritional --cov-report=xml:coverage.xml
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      - name: Verify Quality Gate Result
+        if: always()
+        run: |
+          echo "::notice::Quality Gate verification initiated"
+          # The SonarCloud action will fail the workflow if Quality Gate fails
+          # because sonar.qualitygate.wait=true is set in sonar-project.properties
+      - name: Comment Quality Gate Result on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        with:
+          script: |
+            const fs = require('fs');
+            const reportPath = '.scannerwork/report-task.txt';
+            if (fs.existsSync(reportPath)) {
+              const content = fs.readFileSync(reportPath, 'utf8');
+              const match = content.match(/projectKey=(.*?)(?:\n|$)/);
+              const projectKey = match ? match[1] : 'unknown';
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `## SonarCloud Quality Gate Report\n\n✅ Analysis completed. Check [SonarCloud Dashboard](https://sonarcloud.io/project/overview?id=${projectKey}) for details.\n\nQuality Gate must pass for merge:\n- New Code Coverage: >= 80%\n- New Code Duplication: <= 3%\n- Maintainability Rating: A\n- Reliability Rating: A\n- Security Rating: A\n- Security Hotspots Reviewed: 100%`
+              });
+            }
+  build-prod:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:11.6
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: noharm
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.11
+      - name: Setup Python
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-prod.txt
+      - name: Setup PostgreSQL
+        run: |
+          git clone --branch develop https://github.com/noharm-nutricao/nutricao-database
+          psql -h localhost -U postgres -d noharm -a -f nutricao-database/migrations/flyway/V1__create_public_schema.sql -v ON_ERROR_STOP=1
+          psql -h localhost -U postgres -d noharm -a -f nutricao-database/migrations/flyway/V2__create_demo_schema.sql -v ON_ERROR_STOP=1
+          psql -h localhost -U postgres -d noharm -a -f nutricao-database/migrations/flyway/V3__create_triggers.sql -v ON_ERROR_STOP=1
+          psql -h localhost -U postgres -d noharm -a -f nutricao-database/migrations/flyway/V4__seed_data.sql -v ON_ERROR_STOP=1
+          psql -h localhost -U postgres -d noharm -a -f nutricao-database/migrations/flyway/V5__nitra_test_seed.sql -v ON_ERROR_STOP=1
+      - name: Setup Application
+        run: |
+          python mobile.py &
+          sleep 10

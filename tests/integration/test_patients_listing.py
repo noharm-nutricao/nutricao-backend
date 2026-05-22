@@ -10,8 +10,89 @@ All other active admissions (6-10, …) have no triagem row.
 """
 
 import pytest
+from sqlalchemy import text
+
+from tests.conftest import session, session_commit
+
+_TEST_ADMS = [1, 2, 3, 4, 5]
 
 URL = "/patients"
+
+
+@pytest.fixture(scope="module", autouse=True)
+def setup_patients_listing_module():
+    _ensure_triagem_table()
+    _cleanup()
+    _seed()
+    yield
+    _cleanup()
+
+
+def _ensure_triagem_table():
+    session.execute(
+        text(
+            """CREATE TABLE IF NOT EXISTS demo.triagem (
+                nratendimento BIGINT PRIMARY KEY,
+                protocolo VARCHAR(10),
+                mnutric_total SMALLINT,
+                mn_dims JSONB,
+                mn_apache_manual BOOLEAN,
+                mn_sofa_manual BOOLEAN,
+                dados_incompletos BOOLEAN,
+                nrs_total SMALLINT,
+                nrs_dims JSONB,
+                nrs_nut SMALLINT,
+                nrs_completo BOOLEAN,
+                classificacao VARCHAR(3),
+                sev VARCHAR(3),
+                pri SMALLINT,
+                haval SMALLINT,
+                d7 BOOLEAN,
+                calculado_at TIMESTAMP,
+                update_at TIMESTAMP
+            )"""
+        )
+    )
+    session_commit()
+
+
+def _cleanup():
+    session.execute(
+        text("DELETE FROM demo.triagem WHERE nratendimento = ANY(:adms)"),
+        {"adms": _TEST_ADMS},
+    )
+    session_commit()
+
+
+def _seed():
+    rows = [
+        (1, "MNUTRIC", 7, '{"apache":2,"sofa":1,"idade":2,"comor":1,"dias":1}', True, True, False, 3, '{"nut":1,"doenca":1,"idade":1}', 1, True,  "cr", "cr", 1),
+        (2, "MNUTRIC", 5, '{"apache":2,"sofa":1,"idade":1,"comor":1,"dias":0}', True, True, False, 2, '{"nut":1,"doenca":1,"idade":0}', 1, True,  "al", "al", 3),
+        (3, "NRS2002", 0, None,                                                  False, False, False, 4, '{"nut":2,"doenca":2,"idade":0}', 2, True,  "al", "al", 4),
+        (5, "NRS2002", 0, None,                                                  False, False, False, 2, '{"nut":1,"doenca":1,"idade":0}', 1, False, "bx", "bx", 5),
+        (4, "MNUTRIC", 0, '{"apache":0,"sofa":0,"idade":0,"comor":0,"dias":0}', False, False, True,  0, None,                             0, False, "",   "",   6),
+    ]
+    for adm, prot, mn_total, mn_dims, mn_ap_m, mn_s_m, dados_inc, nrs_total, nrs_dims, nrs_nut, nrs_comp, classif, sev, pri in rows:
+        session.execute(
+            text(
+                """INSERT INTO demo.triagem
+                   (nratendimento, protocolo, mnutric_total, mn_dims,
+                    mn_apache_manual, mn_sofa_manual, dados_incompletos,
+                    nrs_total, nrs_dims, nrs_nut, nrs_completo,
+                    classificacao, sev, pri)
+                   VALUES (:adm, :prot, :mn_total, CAST(:mn_dims AS JSONB),
+                           :mn_ap_m, :mn_s_m, :dados_inc,
+                           :nrs_total, CAST(:nrs_dims AS JSONB), :nrs_nut, :nrs_comp,
+                           :classif, :sev, :pri)"""
+            ),
+            {
+                "adm": adm, "prot": prot, "mn_total": mn_total, "mn_dims": mn_dims,
+                "mn_ap_m": mn_ap_m, "mn_s_m": mn_s_m, "dados_inc": dados_inc,
+                "nrs_total": nrs_total, "nrs_dims": nrs_dims, "nrs_nut": nrs_nut,
+                "nrs_comp": nrs_comp, "classif": classif, "sev": sev, "pri": pri,
+            },
+        )
+    session_commit()
 
 CAMPO1_REQUIRED_FIELDS = {
     "protocolo",

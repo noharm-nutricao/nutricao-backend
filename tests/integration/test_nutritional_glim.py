@@ -106,15 +106,13 @@ def _seed():
 
 
 def _cleanup():
-    session.execute(
-        text("DELETE FROM demo.nutricional_d7 WHERE nratendimento >= 910000")
-    )
-    session.execute(
-        text("DELETE FROM demo.nutricional_glim WHERE nratendimento >= 910000")
-    )
-    session.execute(
-        text("DELETE FROM demo.pessoa WHERE nratendimento >= 910000")
-    )
+    session.execute(text("DELETE FROM demo.nutricional_triagem WHERE nratendimento >= 910000"))
+    session.execute(text("DELETE FROM demo.nutricional_alerta WHERE nratendimento >= 910000"))
+    session.execute(text("DELETE FROM demo.nutricional_avaliacao WHERE nratendimento >= 910000"))
+    session.execute(text("DELETE FROM demo.nutricional_nrs WHERE nratendimento >= 910000"))
+    session.execute(text("DELETE FROM demo.nutricional_d7 WHERE nratendimento >= 910000"))
+    session.execute(text("DELETE FROM demo.nutricional_glim WHERE nratendimento >= 910000"))
+    session.execute(text("DELETE FROM demo.pessoa WHERE nratendimento >= 910000"))
     session_commit()
 
 
