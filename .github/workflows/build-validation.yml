@@ -97,7 +97,7 @@ jobs:
           ENV: test
           POTGRESQL_CONNECTION_STRING: postgresql://postgres@localhost/noharm
         run: |
-          pytest tests/unit/test_nutritional*.py tests/integration/test_nutritional*.py --cov=services/nutritional --cov-report=xml:coverage.xml
+          python -m pytest tests/unit/test_nutritional*.py tests/integration/test_nutritional*.py --cov=services/nutritional --cov-report=xml:coverage.xml
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@master

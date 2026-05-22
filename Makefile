@@ -1,4 +1,4 @@
-.PHONY: test-setup test test-unit test-integration test-file test-cov db-start db-stop db-reset
+.PHONY: test-setup test test-unit test-integration test-file test-cov test-nitra db-start db-stop db-reset
 
 COMPOSE = docker compose -f docker-compose.test.yml
 
@@ -26,6 +26,14 @@ test-file:
 ## Run tests with coverage report
 test-cov:
 	ENV=test python -m pytest --cov=. --cov-report=html
+
+## Run nutritional tests against nitra_db (docker-compose.nitra.yml must be up)
+test-nitra:
+	DB_HOST=localhost DB_NAME=noharm DB_USER=postgres DB_PASSWORD="" ENV=test python -m pytest \
+		tests/unit/ \
+		tests/integration/test_nutritional_d7.py \
+		tests/integration/test_nutritional_glim.py \
+		tests/integration/test_nutritional_patients.py -v
 
 ## Start the database container (data preserved)
 db-start:
