@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from types import SimpleNamespace
 
 from models.main import User
+from models.patient import Patient
 from exception.validation_error import ValidationError
 from models.main import db
 from models.nutritional import NutritionalAssessment, NutritionalD7, NutritionalGlim
