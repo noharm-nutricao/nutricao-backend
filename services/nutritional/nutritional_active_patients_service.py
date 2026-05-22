@@ -69,7 +69,6 @@ def get_patients(request_data: NutritionalPatientsRequest):
         # sev: default to "bx" in Sprint 0
         sev = row.sev if row.sev else "bx"
 
-        # freq_horas — integer hours from latest assessment (null if none/rotina)
         freq_horas = row.freq_horas
 
         # GLIM fields
