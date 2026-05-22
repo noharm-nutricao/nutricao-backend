@@ -51,7 +51,7 @@ def get_patients(setor=None, ala=None):
 
     d7_expr = (d7_subq > 0).label("d7")
 
-    # freq_horas — latest assessment frequencia mapped to hours
+    # freq_horas
     freq_map = case(
         (NutritionalAssessment.frequencia == "12h", 12),
         (NutritionalAssessment.frequencia == "24h", 24),
