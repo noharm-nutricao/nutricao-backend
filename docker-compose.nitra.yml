@@ -27,7 +27,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ${DATABASE_PATH:-./database}:/sql # path para o projeto do database definido no SEU .env
+      - ${DATABASE_PATH:-./database}:/sql
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 5s
@@ -39,7 +39,7 @@ services:
       db:
         condition: service_healthy
     volumes:
-      - ${DATABASE_PATH:-./database}:/sql # path para o projeto do database definido no SEU .env
+      - ${DATABASE_PATH:-./database}:/sql
     entrypoint: >
       sh -c "
       psql -h db -U postgres -d noharm -f /sql/noharm-public.sql &&

@@ -1,11 +1,18 @@
 from decorators.has_permission_decorator import has_permission
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 
-from models.prescription import Patient
+from models.main import User
+from exception.validation_error import ValidationError
+from models.main import db
+from models.nutritional import NutritionalAssessment, NutritionalD7, NutritionalGlim
+from models.requests.nutritional_glim_request import diagnostico_to_api
 from repository.nutritional import nutritional_repository
 from security.permission import Permission
 import logging
+
+from utils import status
+
 
 @has_permission(Permission.READ_PRESCRIPTION)
 def get_patients():
@@ -214,6 +221,137 @@ def _restore_sofa_from_dimension(score):
 
     return score
 
+def _calculate_status(d7: NutritionalD7) -> str:
+    if d7.concluido:
+        return "concluido"
+
+    dt_prevista = d7.dt_prevista
+    now = datetime.now(dt_prevista.tzinfo) if dt_prevista.tzinfo else datetime.now()
+
+    if dt_prevista > now + timedelta(hours=48):
+        return "pendente"
+    if dt_prevista > now:
+        return "vencendo"
+    return "vencido"
+
+
+def _datetime_to_iso(value: datetime) -> str | None:
+    if value is None:
+        return None
+
+    return value.isoformat()
+
+
+def _d7_to_dict(d7: NutritionalD7) -> dict:
+    return {
+        "id": d7.id,
+        "dt_prevista": _datetime_to_iso(d7.dt_prevista),
+        "concluido": d7.concluido,
+        "status": _calculate_status(d7),
+        "updated_at": _datetime_to_iso(d7.updated_at),
+    }
+
+
+def _glim_to_dict(glim: NutritionalGlim) -> dict:
+    return {
+        "diagnostico": diagnostico_to_api(glim.diagnostico),
+        "fenotipos": glim.fenotipos or [],
+        "etiologias": glim.etiologias or [],
+        "observacao": glim.observacao,
+        "created_at": _datetime_to_iso(glim.created_at),
+    }
+
+
+@has_permission(Permission.WRITE_NUTRITIONAL)
+def create_d7(nratendimento: int, user_context: User):
+    d7 = nutritional_repository.upsert_d7(
+        nratendimento=nratendimento,
+        idusuario=user_context.id,
+    )
+    return _d7_to_dict(d7)
+
+
+@has_permission(Permission.WRITE_NUTRITIONAL)
+def get_d7(nratendimento: int, user_context: User):
+    d7 = nutritional_repository.get_active_d7(nratendimento)
+    if d7 is None:
+        return None
+    return _d7_to_dict(d7)
+
+
+@has_permission(Permission.WRITE_NUTRITIONAL)
+def close_d7(nratendimento: int, id: int, user_context: User):
+    d7 = nutritional_repository.close_d7(id=id, nratendimento=nratendimento)
+    return _d7_to_dict(d7)
+
+
+def _validate_glim_required(data):
+    if not data.fenotipos:
+        raise ValidationError(
+            ">=1 fenotifico e >=1 etiologico obrigatorios",
+            "errors.glimInsufficient",
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+
+    if not data.etiologias:
+        raise ValidationError(
+            ">=1 fenotifico e >=1 etiologico obrigatorios",
+            "errors.glimInsufficient",
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+
+
+@has_permission(Permission.WRITE_NUTRITIONAL)
+def save_glim(nratendimento: int, data, idusuario: int):
+    patient = get_patients_by_nra(nratendimento)
+
+    if not patient:
+        raise ValidationError("Paciente não encontrado", "errors.notFound", status.HTTP_404_NOT_FOUND)
+
+    _validate_glim_required(data)
+
+    glim = nutritional_repository.upsert_glim(
+        nratendimento=nratendimento,
+        diagnostico=data.diagnostico_db,
+        fenotipos=data.fenotipos,
+        etiologias=data.etiologias,
+        observacao=data.observacao,
+        idusuario=idusuario,
+    )
+
+    d7 = None
+    d7_criado = False
+    if data.diagnostico_db != "nd":
+        d7 = nutritional_repository.upsert_d7(
+            nratendimento=nratendimento,
+            idusuario=idusuario,
+        )
+        d7_criado = True
+
+    return {
+        "id": glim.id,
+        "diagnostico": diagnostico_to_api(glim.diagnostico),
+        "fenotipos": glim.fenotipos or [],
+        "etiologias": glim.etiologias or [],
+        "d7_criado": d7_criado,
+        "d7_dt_prevista": _datetime_to_iso(d7.dt_prevista) if d7 else None,
+    }
+
+
+@has_permission(Permission.READ_PRESCRIPTION)
+def get_glim(nratendimento: int):
+    glim = nutritional_repository.get_latest_glim(nratendimento)
+
+    if glim is None:
+        raise ValidationError(
+            "Diagnostico GLIM nao encontrado",
+            "errors.notFound",
+            status.HTTP_404_NOT_FOUND,
+        )
+
+    return _glim_to_dict(glim)
+
+
 def get_patients_by_nra(nratendimento: int):
     """
     Busca pacientes pelo nratendimento filtrando na service.
@@ -232,4 +370,105 @@ def get_patients_by_nra(nratendimento: int):
         logging.error(f"Erro ao buscar pacientes no repositório: {str(e)}")
         raise Exception(
             "Estamos com problemas para consultar pacientes em nossa base, tente novamente mais tarde"
+        )
+
+
+@has_permission(Permission.WRITE_NUTRITIONAL)
+def create_assessment(nratendimento: int, data, idusuario: int):
+    patient = get_patients_by_nra(nratendimento)
+
+    if not patient:
+        raise ValidationError("Paciente não encontrado", "errors.notFound", status.HTTP_404_NOT_FOUND)
+
+    created_at = datetime.now()
+    assessment = NutritionalAssessment(
+        nratendimento=nratendimento,
+        idusuario=idusuario,
+        conduta=data.conduta,
+        frequencia=data.frequencia,
+        ingestao=data.ingestao,
+        meta_kcal=data.meta_kcal,
+        meta_prot=data.meta_prot,
+        created_at=created_at
+    )
+
+    nutritional_repository.create_assessment(assessment)
+
+    # Se prox_visita = D7, encerra D7 ativo e cria novo
+    _handle_d7_closure(
+        nratendimento=nratendimento,
+        prox_visita=data.prox_visita,
+        idusuario=idusuario
+    )
+
+    return {
+        "id": assessment.id,
+        "conduta": assessment.conduta,
+        "prox_visita": assessment.frequencia,
+        "ingestao": assessment.ingestao,
+        "meta_kcal": assessment.meta_kcal,
+        "meta_prot": assessment.meta_prot,
+        "created_at": _datetime_to_iso(created_at)
+    }
+
+
+@has_permission(Permission.READ_PRESCRIPTION)
+def get_assessments(nratendimento: int, limit: int = 10):
+    total, assessments = nutritional_repository.get_assessments_by_nratendimento(
+        nratendimento=nratendimento,
+        limit=limit
+    )
+
+    return {
+        "data": [
+            {
+                "id": assessment.id,
+                "conduta": assessment.conduta,
+                "prox_visita": assessment.frequencia,
+                "ingestao": assessment.ingestao,
+                "meta_kcal": assessment.meta_kcal,
+                "meta_prot": assessment.meta_prot,
+                "created_at": _datetime_to_iso(assessment.created_at)
+            }
+            for assessment in assessments
+        ],
+        "total": total
+    }
+
+
+def _calculate_d7_date(prox_visita: str):
+    from datetime import datetime, timedelta
+
+    now = datetime.now()
+
+    if prox_visita == "24h":
+        return now + timedelta(hours=24)
+    elif prox_visita == "48h":
+        return now + timedelta(hours=48)
+    elif prox_visita == "semanal":
+        return now + timedelta(days=7)
+    elif prox_visita == "D7":
+        return now + timedelta(days=7)
+    else:  # rotina
+        return now + timedelta(days=30)
+
+
+def _handle_d7_closure(nratendimento: int, prox_visita: str, idusuario: int):
+    if prox_visita == "D7":
+        # Busca D7 ativo
+        active_d7 = nutritional_repository.get_active_d7(nratendimento)
+
+        if active_d7:
+            # Encerra D7 ativo
+            nutritional_repository.close_d7(
+                id=active_d7.id,
+                nratendimento=nratendimento
+            )
+
+        # Cria novo D7
+        dt_prevista = _calculate_d7_date("D7")
+        nutritional_repository.create_d7(
+            nratendimento=nratendimento,
+            dt_prevista=dt_prevista,
+            idusuario=idusuario
         )

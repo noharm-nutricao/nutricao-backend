@@ -40,6 +40,7 @@ from routes.prescription import app_pres
 from routes.prescription_crud import app_pres_crud
 from routes.protocol import app_protocol
 from routes.queue import app_queue
+from routes.nutritional.nutritional_alert import app_nutritional_alert
 
 # Regulation routes
 from routes.regulation.regulation import app_regulation
@@ -99,6 +100,7 @@ def register_blueprints(app):
     app.register_blueprint(app_user_admin)
     app.register_blueprint(app_pres_crud)
     app.register_blueprint(app_nutritional_active_patients)
+    app.register_blueprint(app_nutritional_alert)
 
     # Admin blueprints
     app.register_blueprint(app_admin_freq)

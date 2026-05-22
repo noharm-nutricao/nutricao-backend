@@ -111,7 +111,8 @@ def _cleanup():
     session.execute(
         text("DELETE FROM demo.nutricional_nrs WHERE nratendimento >= 100000")
     )
-    session.execute(text("DELETE FROM demo.triagem WHERE nratendimento >= 100000"))
+    if session.execute(text("SELECT to_regclass('demo.triagem')")).scalar() is not None:
+        session.execute(text("DELETE FROM demo.triagem WHERE nratendimento >= 100000"))
 
     session_commit()
     pass

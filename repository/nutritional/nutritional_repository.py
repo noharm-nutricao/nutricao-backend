@@ -1,9 +1,17 @@
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import text
 
+from exception.validation_error import ValidationError
 from models.enums import SegmentTypeEnum
 from models.main import db
-from models.nutritional import NutritionalScreening
+from models.nutritional import (
+    NutritionalAssessment,
+    NutritionalD7,
+    NutritionalGlim,
+    NutritionalScreening,
+)
 from models.prescription import Patient
+from utils import status
 
 
 def get_patients_repository():
@@ -169,6 +177,63 @@ def get_active_admissions(schema: str):
     result = db.session.execute(query, {"icu_type": SegmentTypeEnum.ICU.value})
     return result.fetchall()
 
+def get_active_d7(nratendimento: int):
+    return (
+        db.session.query(NutritionalD7)
+        .filter(
+            NutritionalD7.nratendimento == nratendimento,
+            NutritionalD7.concluido.is_(False),
+        )
+        .first()
+    )
+
+
+def upsert_d7(nratendimento: int, idusuario: int) -> NutritionalD7:
+    now = datetime.now(timezone.utc)
+    dt_prevista = now + timedelta(days=7)
+
+    d7 = get_active_d7(nratendimento)
+
+    if d7 is None:
+        d7 = NutritionalD7()
+        d7.nratendimento = nratendimento
+        d7.idusuario = idusuario
+        d7.created_at = now
+        db.session.add(d7)
+    else:
+        d7.updated_at = now
+
+    d7.dt_prevista = dt_prevista
+    d7.concluido = False
+
+    db.session.flush()
+    return d7
+
+
+def close_d7(id: int, nratendimento: int) -> NutritionalD7:
+    d7 = (
+        db.session.query(NutritionalD7)
+        .filter(
+            NutritionalD7.id == id,
+            NutritionalD7.nratendimento == nratendimento,
+        )
+        .first()
+    )
+
+    if d7 is None:
+        raise ValidationError(
+            "D7 não encontrado",
+            "errors.notFound",
+            status.HTTP_404_NOT_FOUND,
+        )
+
+    d7.concluido = True
+    d7.updated_at = datetime.now(timezone.utc)
+
+    db.session.flush()
+    return d7
+
+
 # Verify if we have the screening table and their columns.
 def _is_nutritional_screening_table_ready() -> bool:
     connection = db.session.connection()
@@ -218,3 +283,127 @@ def _is_nutritional_screening_table_ready() -> bool:
     }
 
     return required_columns.issubset(existing_columns)
+
+
+def create_assessment(assessment: NutritionalAssessment):
+    db.session.add(assessment)
+    db.session.flush()
+
+
+def get_assessments_by_nratendimento(nratendimento: int, limit: int = 10):
+    """Retorna avaliacoes de um paciente ordenadas por data desc (mais recentes primeiro).
+
+    Args:
+        nratendimento: ID do atendimento
+        limit: Máximo de registros retornados (default: 10)
+
+    Returns:
+        Tuple com (total, assessments) onde assessments é lista em ordem cronológica inversa
+    """
+    total = (
+        db.session.query(NutritionalAssessment)
+        .filter(NutritionalAssessment.nratendimento == nratendimento)
+        .count()
+    )
+
+    assessments = (
+        db.session.query(NutritionalAssessment)
+        .filter(NutritionalAssessment.nratendimento == nratendimento)
+        .order_by(NutritionalAssessment.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    return total, assessments
+
+
+def get_latest_glim(nratendimento: int) -> NutritionalGlim | None:
+    return (
+        db.session.query(NutritionalGlim)
+        .filter(NutritionalGlim.nratendimento == nratendimento)
+        .order_by(NutritionalGlim.created_at.desc(), NutritionalGlim.id.desc())
+        .first()
+    )
+
+
+def upsert_glim(
+    nratendimento: int,
+    diagnostico: str,
+    fenotipos: list[str],
+    etiologias: list[str],
+    observacao: str | None,
+    idusuario: int,
+) -> NutritionalGlim:
+    now = datetime.now(timezone.utc)
+
+    glim = get_latest_glim(nratendimento)
+
+    if glim is None:
+        glim = NutritionalGlim()
+        glim.nratendimento = nratendimento
+        glim.created_at = now
+        db.session.add(glim)
+    else:
+        glim.updated_at = now
+
+    glim.diagnostico = diagnostico
+    glim.fenotipos = fenotipos
+    glim.etiologias = etiologias
+    glim.observacao = observacao
+    glim.idusuario = idusuario
+
+    db.session.flush()
+    return glim
+
+
+def create_d7(nratendimento: int, dt_prevista, idusuario: int = None):
+    """Cria um novo D7.
+
+    Args:
+        nratendimento: ID do atendimento
+        dt_prevista: Data prevista para o D7
+        idusuario: ID do usuário que criou (opcional)
+
+    Returns:
+        NutritionalD7 object criado
+    """
+    from datetime import datetime
+
+    d7 = NutritionalD7(
+        nratendimento=nratendimento,
+        dt_prevista=dt_prevista,
+        concluido=False,
+        idusuario=idusuario,
+        created_at=datetime.now()
+    )
+
+    db.session.add(d7)
+    db.session.flush()
+
+    return d7
+
+
+
+def get_alertas(nratendimento: int):
+    from models.nutritional import NutritionalAlert
+
+    return (
+        db.session.query(NutritionalAlert)
+        .filter(
+            NutritionalAlert.nratendimento == nratendimento,
+            NutritionalAlert.ativo == True,
+            )
+        .all()
+    )
+
+def get_alerta(nratendimento: int, alerta_id: int):
+    from models.nutritional import NutritionalAlert
+
+    return (
+        db.session.query(NutritionalAlert)
+        .filter(
+            NutritionalAlert.nratendimento == nratendimento,
+            NutritionalAlert.id == alerta_id,
+        )
+        .first()
+    )

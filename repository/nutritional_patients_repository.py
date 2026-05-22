@@ -10,6 +10,7 @@ from models.nutritional import (
     NutritionalScreening,
     NutritionalD7,
     NutritionalGlim,
+    NutritionalAssessment,
 )
 from models.prescription import Patient
 from models.segment import Segment
