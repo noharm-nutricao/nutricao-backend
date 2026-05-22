@@ -27,7 +27,7 @@ class NutritionalNrs(db.Model):
 class NutritionalScreening(db.Model):
     __tablename__ = "nutricional_triagem"
 
-    id = db.Column("id", db.Integer, primary_key=True)
+    id = db.Column("idnutricional_triagem", db.Integer, primary_key=True)
     nratendimento = db.Column("nratendimento", db.BigInteger, nullable=False)
     protocolo = db.Column("protocolo", db.String, nullable=False)
 
@@ -56,11 +56,11 @@ class NutritionalScreening(db.Model):
 class NutritionalGlim(db.Model):
     __tablename__ = "nutricional_glim"
 
-    id = db.Column("id", db.Integer, primary_key=True)
+    id = db.Column("idnutricional_glim", db.Integer, primary_key=True)
     nratendimento = db.Column("nratendimento", db.BigInteger, nullable=False)
     diagnostico = db.Column("diagnostico", db.String, nullable=False)
     fenotipos = db.Column("fenotipos", postgresql.ARRAY(postgresql.TEXT), nullable=True)
-    etiologias = db.Column("etiologias", postgresql.ARRAY(postgresql.TEXT), nullable=True)
+    etiologias = db.Column("etiologicos", postgresql.ARRAY(postgresql.TEXT), nullable=True)
     observacao = db.Column("observacao", postgresql.TEXT, nullable=True)
     idusuario = db.Column("idusuario", db.Integer, nullable=True)
     created_at = db.Column("created_at", db.DateTime, nullable=True)
@@ -70,7 +70,7 @@ class NutritionalGlim(db.Model):
 class NutritionalAssessment(db.Model):
     __tablename__ = "nutricional_avaliacao"
 
-    id = db.Column("id", db.Integer, primary_key=True)
+    id = db.Column("idnutricional_avaliacao", db.Integer, primary_key=True)
     nratendimento = db.Column("nratendimento", db.BigInteger, nullable=False)
     idusuario = db.Column("idusuario", db.Integer, nullable=True)
     conduta = db.Column("conduta", postgresql.TEXT, nullable=True)
@@ -84,7 +84,7 @@ class NutritionalAssessment(db.Model):
 class NutritionalD7(db.Model):
     __tablename__ = "nutricional_d7"
 
-    id = db.Column("id", db.Integer, primary_key=True)
+    id = db.Column("idnutricional_d7", db.Integer, primary_key=True)
     nratendimento = db.Column("nratendimento", db.BigInteger, nullable=False)
     dt_prevista = db.Column("dt_prevista", db.DateTime, nullable=False)
     concluido = db.Column("concluido", db.Boolean, nullable=True)

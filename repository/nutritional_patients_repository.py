@@ -124,7 +124,7 @@ def get_patients(setor=None, ala=None):
 
     # campo1 — NRS-2002 score fields from latest NRS2002 screening row
     nrs_data_subq = (
-        db.session.query(
+        db.session.query( 
             func.json_build_object(
                 "nrs_total", NutritionalScreening.nrs_total,
                 "nrs_nut", NutritionalScreening.nrs_nut,

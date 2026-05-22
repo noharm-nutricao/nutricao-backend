@@ -223,6 +223,7 @@ class RegulationAction(Enum):
 class SegmentTypeEnum(Enum):
     ADULT = 1
     PEDIATRIC = 2
+    ICU = 3
 
 
 class DefaultMeasureUnitEnum(Enum):

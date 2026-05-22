@@ -9,23 +9,23 @@ test-setup:
 
 ## Run all tests
 test:
-	ENV=test python -m pytest
+	ENV=test python3 -m pytest
 
 ## Run only unit tests (no DB required)
 test-unit:
-	ENV=test python -m pytest tests/unit/ -v
+	ENV=test python3 -m pytest tests/unit/ -v
 
 ## Run only integration tests (requires DB)
 test-integration:
-	ENV=test python -m pytest tests/integration/ -v
+	ENV=test python3 -m pytest tests/integration/ -v
 
 ## Run a specific test file (usage: make test-file FILE=tests/integration/test_drug.py)
 test-file:
-	ENV=test python -m pytest $(FILE) -v
+	ENV=test python3 -m pytest $(FILE) -v
 
 ## Run tests with coverage report
 test-cov:
-	ENV=test python -m pytest --cov=. --cov-report=html
+	ENV=test python3 -m pytest --cov=. --cov-report=html
 
 ## Start the database container (data preserved)
 db-start:

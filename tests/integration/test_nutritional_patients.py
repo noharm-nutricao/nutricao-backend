@@ -92,8 +92,9 @@ def _ensure_schema():
             created_by BIGINT NOT NULL DEFAULT 1
         )""",
         """CREATE TABLE IF NOT EXISTS demo.nutricional_triagem (
-            idnutricional_triagem BIGSERIAL PRIMARY KEY,
+            id BIGSERIAL PRIMARY KEY,
             nratendimento BIGINT NOT NULL,
+            protocolo VARCHAR(32) NOT NULL DEFAULT 'NRS2002',
             classificacao TEXT,
             created_at TIMESTAMP NOT NULL DEFAULT NOW(),
             created_by BIGINT NOT NULL DEFAULT 1
@@ -127,6 +128,28 @@ def _ensure_schema():
     session.execute(text(
         "ALTER TABLE demo.nutricional_avaliacao ADD COLUMN IF NOT EXISTS ingestao INTEGER"
     ))
+
+    # nutricional_triagem: add columns required by NutritionalScreening model
+    for col in [
+        "ALTER TABLE demo.nutricional_triagem ADD COLUMN IF NOT EXISTS protocolo VARCHAR(32) NOT NULL DEFAULT 'NRS2002'",
+        "ALTER TABLE demo.nutricional_triagem ADD COLUMN IF NOT EXISTS nrs_nut INTEGER",
+        "ALTER TABLE demo.nutricional_triagem ADD COLUMN IF NOT EXISTS nrs_doenca INTEGER",
+        "ALTER TABLE demo.nutricional_triagem ADD COLUMN IF NOT EXISTS nrs_idade INTEGER",
+        "ALTER TABLE demo.nutricional_triagem ADD COLUMN IF NOT EXISTS nrs_total INTEGER",
+        "ALTER TABLE demo.nutricional_triagem ADD COLUMN IF NOT EXISTS nrs_completo BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE demo.nutricional_triagem ADD COLUMN IF NOT EXISTS nrs_ref_at TIMESTAMP",
+        "ALTER TABLE demo.nutricional_triagem ADD COLUMN IF NOT EXISTS mn_idade INTEGER",
+        "ALTER TABLE demo.nutricional_triagem ADD COLUMN IF NOT EXISTS mn_apache INTEGER",
+        "ALTER TABLE demo.nutricional_triagem ADD COLUMN IF NOT EXISTS mn_sofa INTEGER",
+        "ALTER TABLE demo.nutricional_triagem ADD COLUMN IF NOT EXISTS mn_comor INTEGER",
+        "ALTER TABLE demo.nutricional_triagem ADD COLUMN IF NOT EXISTS mn_dias INTEGER",
+        "ALTER TABLE demo.nutricional_triagem ADD COLUMN IF NOT EXISTS mn_total INTEGER",
+        "ALTER TABLE demo.nutricional_triagem ADD COLUMN IF NOT EXISTS mn_apache_manual BOOLEAN",
+        "ALTER TABLE demo.nutricional_triagem ADD COLUMN IF NOT EXISTS mn_sofa_manual BOOLEAN",
+        "ALTER TABLE demo.nutricional_triagem ADD COLUMN IF NOT EXISTS calculado_at TIMESTAMP",
+        "ALTER TABLE demo.nutricional_triagem ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP",
+    ]:
+        session.execute(text(col))
 
     session_commit()
 

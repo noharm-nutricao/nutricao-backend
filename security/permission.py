@@ -111,3 +111,6 @@ class Permission(Enum):
 
     READ_NAV = "READ_NAV"  # permission to navigation data
     NAV_COPY_PATIENT = "NAV_COPY_PATIENT"  # permission to copy patient data
+
+    READ_NUTRITIONAL = "READ_NUTRITIONAL"  # permission to view nutritional data
+    WRITE_NUTRITIONAL = "WRITE_NUTRITIONAL"  # permission to write nutritional data

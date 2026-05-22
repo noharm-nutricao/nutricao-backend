@@ -69,6 +69,7 @@ class PrescriptionAudit(db.Model):
 
 
 class Patient(db.Model):
+    __table_args__ = {"schema": "demo"}
     __tablename__ = "pessoa"
 
     idPatient = db.Column("fkpessoa", db.BigInteger, nullable=False)
@@ -79,6 +80,8 @@ class Patient(db.Model):
     gender = db.Column("sexo", db.String(1), nullable=True)
     weight = db.Column("peso", db.Float, nullable=True)
     height = db.Column("altura", db.Float, nullable=True)
+    bed = db.Column("leito", db.String(16), nullable=True)
+    idDepartment = db.Column("fksetor", db.BigInteger, nullable=True)
     weightDate = db.Column("dtpeso", db.DateTime, nullable=True)
     observation = deferred(db.Column("anotacao", db.String, nullable=True))
     skinColor = db.Column("cor", db.String, nullable=True)
@@ -97,8 +100,10 @@ class Patient(db.Model):
     tags = db.Column("marcadores", postgresql.ARRAY(db.String(100)), nullable=True)
     responsiblePhysician = db.Column("medico_responsavel", db.String, nullable=True)
     id_icd = db.Column("idcid", db.String, nullable=True)
+    lastTransferDate = db.Column("dt_ultima_transferencia", db.DateTime, nullable=True)
     dischargeDateForecast = db.Column("dt_alta_prevista", db.DateTime, nullable=True)
     city = db.Column("cidade", db.String, nullable=True)
+  #  fksetor = db.Column("fksetor", db.Integer, nullable=True)
 
 
 class PatientAudit(db.Model):
