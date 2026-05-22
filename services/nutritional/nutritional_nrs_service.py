@@ -65,7 +65,7 @@ def _normalize_department_name(department: str) -> str:
     return collapsed_spaces.strip().lower()
 
 
-def is_uti_helper(patient_department: str) -> bool:
+def is_uti_helper(patient_department: Optional[str]) -> bool:
     if not patient_department:
         return False
     normalized_department = _normalize_department_name(patient_department)
@@ -116,10 +116,11 @@ def _score_nrs_component_b(
     chapter = cid[0].upper()
     return mappings.chapters.get(chapter, 0)
 
-
-def calculate_age(dt_nascimento: datetime):
-    return datetime.now().year - dt_nascimento.year
-
+def calculate_age(dt_nascimento: datetime) -> int:
+    hoje = datetime.today()
+    return hoje.year - dt_nascimento.year - (
+        (hoje.month, hoje.day) < (dt_nascimento.month, dt_nascimento.day)
+    )
 
 def build_nrs_update(
     patient: Patient,
@@ -127,7 +128,7 @@ def build_nrs_update(
     nrs_row: Optional[NutritionalNrs],
     *,
     score_nrs_component_a_fn: Callable[[Optional[Any]], Optional[int]],
-    score_nrs_component_b_fn: Callable[[int, str, Callable, Callable], int],
+    score_nrs_component_b_fn: Callable[[int, str], int],
     calc_age_fn: Callable[[datetime], int],
     now_fn: Callable[[], datetime]
 ) -> NrsScoreDTO:
@@ -166,7 +167,7 @@ def __recalculate_nrs(
     score_nrs_component_a_fn: Callable[
         [Optional[NutritionalNrs]], Optional[int]
     ] = score_nrs_component_a,
-    score_nrs_component_b_fn: Callable[[str, bool], int] = score_nrs_component_b,
+    score_nrs_component_b_fn: Callable[[int, str], int] = score_nrs_component_b,
     calc_age_fn: Callable[[datetime], int] = calculate_age,
     now_fn: Callable[[], datetime] = datetime.now
 ) -> None:

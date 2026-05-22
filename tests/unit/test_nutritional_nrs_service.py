@@ -261,15 +261,29 @@ def test_internal_component_b_len_lt_3_uses_chapter_score(
 
 # 8) calculate_age
 
-def test_calculate_age_with_mocked_now_year(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    "today,birthdate,expected_age",
+    [
+        (datetime(2026, 4, 11, 12, 0, 0), datetime(2000, 4, 11, 0, 0, 0), 26),
+        (datetime(2026, 4, 11, 12, 0, 0), datetime(2000, 4, 12, 0, 0, 0), 25),
+        (datetime(2026, 4, 11, 12, 0, 0), datetime(2000, 4, 10, 23, 59, 59), 26),
+        (datetime(2026, 1, 1, 8, 0, 0), datetime(1950, 12, 31, 0, 0, 0), 75),
+    ],
+)
+def test_calculate_age_uses_today_and_birth_month_day(
+    monkeypatch: pytest.MonkeyPatch,
+    today: datetime,
+    birthdate: datetime,
+    expected_age: int,
+) -> None:
     class FixedDateTime:
         @classmethod
-        def now(cls) -> datetime:
-            return datetime(2026, 4, 11, 12, 0, 0)
+        def today(cls) -> datetime:
+            return today
 
     monkeypatch.setattr(svc, "datetime", FixedDateTime)
 
-    assert svc.calculate_age(datetime(2000, 10, 1, 0, 0, 0)) == 26
+    assert svc.calculate_age(birthdate) == expected_age
 
 
 # 9) build_nrs_update

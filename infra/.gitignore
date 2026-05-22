@@ -1,0 +1,10 @@
+# Lambda build
+build/
+lambda.zip
+
+# Python
+__pycache__/
+*.pyc
+
+# venv
+.venv/
