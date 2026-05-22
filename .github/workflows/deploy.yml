@@ -61,33 +61,42 @@ jobs:
           ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t $ECR_REGISTRY/$PROJECT_NAME:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/$PROJECT_NAME:$IMAGE_TAG
+          IMAGE_URI="$ECR_REGISTRY/$PROJECT_NAME:$IMAGE_TAG"
+
+          echo "Buildando imagem: $IMAGE_URI"
+
+          docker build -t "$IMAGE_URI" .
+          docker push "$IMAGE_URI"
+
+          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
 
       - name: Criar ou atualizar Lambda com Terraform
         working-directory: infra
-        env:
-          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
         run: |
           terraform apply -auto-approve \
             -var="aws_region=${{ secrets.AWS_REGION }}" \
             -var="project_name=${{ env.PROJECT_NAME }}" \
-            -var="image_uri=$ECR_REGISTRY/$PROJECT_NAME:$IMAGE_TAG" \
+            -var="image_uri=${{ env.IMAGE_URI }}" \
             -var="db_host=${{ secrets.DB_HOST }}" \
             -var="db_name=${{ secrets.DB_NAME }}" \
             -var="db_user=${{ secrets.DB_USER }}" \
             -var="db_password=${{ secrets.DB_PASSWORD }}"
 
+      - name: Aguarda Lambda ficar atualizada
+        run: |
+          aws lambda wait function-updated \
+            --function-name "$PROJECT_NAME"
+
       - name: Publica nova versão
         id: publish
         run: |
           VERSION=$(aws lambda publish-version \
-            --function-name $PROJECT_NAME \
+            --function-name "$PROJECT_NAME" \
             --query 'Version' \
             --output text)
 
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Nova versão publicada: $VERSION"
 
       - name: Testa nova versão antes de trocar tráfego
         run: |
@@ -98,32 +107,88 @@ jobs:
             "rawPath": "/nutritional/healthz",
             "rawQueryString": "",
             "headers": {
-              "content-type": "application/json"
+              "content-type": "application/json",
+              "host": "localhost"
             },
             "requestContext": {
               "http": {
                 "method": "GET",
                 "path": "/nutritional/healthz",
-                "sourceIp": "127.0.0.1"
+                "sourceIp": "127.0.0.1",
+                "userAgent": "github-actions"
               }
             },
+            "body": null,
             "isBase64Encoded": false
           }
           EOF
 
           aws lambda invoke \
-            --function-name $PROJECT_NAME:${{ steps.publish.outputs.version }} \
+            --function-name "$PROJECT_NAME:${{ steps.publish.outputs.version }}" \
             --cli-binary-format raw-in-base64-out \
             --payload file://payload.json \
-            response.json
+            --log-type Tail \
+            response.json \
+            > invoke-output.json
 
-          cat response.json
+          echo "=============================="
+          echo "Invoke output"
+          echo "=============================="
+          cat invoke-output.json | jq .
 
-          grep -q "200" response.json
+          echo "=============================="
+          echo "Lambda response"
+          echo "=============================="
+          cat response.json | jq . || cat response.json
+
+          LOG_RESULT=$(jq -r '.LogResult // empty' invoke-output.json)
+
+          if [ -n "$LOG_RESULT" ]; then
+            echo "=============================="
+            echo "Lambda logs"
+            echo "=============================="
+            echo "$LOG_RESULT" | base64 -d || true
+          fi
+
+          if jq -e '.FunctionError' invoke-output.json > /dev/null; then
+            echo "Lambda executou com erro."
+            echo "Resposta:"
+            cat response.json
+            exit 1
+          fi
+
+          STATUS_CODE=$(jq -r '.statusCode // empty' response.json)
+
+          if [ "$STATUS_CODE" != "200" ]; then
+            echo "Healthcheck falhou."
+            echo "Status recebido: $STATUS_CODE"
+            echo "Resposta:"
+            cat response.json
+            exit 1
+          fi
+
+          echo "Healthcheck OK na versão ${{ steps.publish.outputs.version }}"
 
       - name: Promove alias live para nova versão
         run: |
-          aws lambda update-alias \
-            --function-name $PROJECT_NAME \
-            --name live \
-            --function-version ${{ steps.publish.outputs.version }}
+          if aws lambda get-alias \
+            --function-name "$PROJECT_NAME" \
+            --name live > /dev/null 2>&1; then
+
+            echo "Alias live já existe. Atualizando..."
+
+            aws lambda update-alias \
+              --function-name "$PROJECT_NAME" \
+              --name live \
+              --function-version "${{ steps.publish.outputs.version }}"
+
+          else
+            echo "Alias live não existe. Criando..."
+
+            aws lambda create-alias \
+              --function-name "$PROJECT_NAME" \
+              --name live \
+              --function-version "${{ steps.publish.outputs.version }}"
+          fi
+
+          echo "Alias live apontando para versão ${{ steps.publish.outputs.version }}"
