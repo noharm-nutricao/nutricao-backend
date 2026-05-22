@@ -16,6 +16,7 @@ _ADM_ACTIVE_UTI = 900001
 _ADM_ACTIVE_ENF = 900002
 _ADM_DISCHARGED = 900003
 _ADM_NO_WEIGHT = 900004
+_ADM_MULTI_AVAL = 900005
 
 REQUIRED_FIELDS = {
     "id",
@@ -280,7 +281,7 @@ def _seed():
         text(
             "INSERT INTO demo.nutricional_triagem "
             "(nratendimento, classificacao, created_at, created_by) "
-            "VALUES (:adm, 'al', NOW(), 1)"
+            "VALUES (:adm, 'al', NOW() - INTERVAL '3 hours', 1)"
         ),
         {"adm": _ADM_ACTIVE_UTI},
     )
@@ -293,11 +294,47 @@ def _seed():
         {"adm": _ADM_ACTIVE_UTI},
     )
 
+    # _ADM_MULTI_AVAL: paciente com 3 assessments para testar hist ordenado
+    session.execute(
+        text(
+            "INSERT INTO demo.pessoa "
+            "(fkpessoa, fkhospital, nratendimento, dtinternacao, dtnascimento, "
+            " sexo, peso, altura, fksetor, leito) "
+            "VALUES (:pk, :hosp, :adm, NOW() - INTERVAL '7 days', '1970-06-01', "
+            " 'F', 70.0, 165.0, :setor, 'ENF-30')"
+        ),
+        {"pk": _ADM_MULTI_AVAL, "hosp": _HOSPITAL, "adm": _ADM_MULTI_AVAL, "setor": _SETOR_ENF},
+    )
+    session.execute(
+        text(
+            "INSERT INTO demo.nutricional_avaliacao "
+            "(nratendimento, conduta, frequencia, ingestao, created_at, created_by) "
+            "VALUES (:adm, 'Conduta antiga', '48h', 50, NOW() - INTERVAL '5 hours', 1)"
+        ),
+        {"adm": _ADM_MULTI_AVAL},
+    )
+    session.execute(
+        text(
+            "INSERT INTO demo.nutricional_avaliacao "
+            "(nratendimento, conduta, frequencia, ingestao, created_at, created_by) "
+            "VALUES (:adm, 'Conduta intermediaria', '24h', 75, NOW() - INTERVAL '2 hours', 1)"
+        ),
+        {"adm": _ADM_MULTI_AVAL},
+    )
+    session.execute(
+        text(
+            "INSERT INTO demo.nutricional_avaliacao "
+            "(nratendimento, conduta, frequencia, ingestao, created_at, created_by) "
+            "VALUES (:adm, 'Conduta mais recente', '12h', 100, NOW() - INTERVAL '30 minutes', 1)"
+        ),
+        {"adm": _ADM_MULTI_AVAL},
+    )
+
     session_commit()
 
 
 def _cleanup():
-    _test_adms = [_ADM_ACTIVE_UTI, _ADM_ACTIVE_ENF, _ADM_DISCHARGED, _ADM_NO_WEIGHT]
+    _test_adms = [_ADM_ACTIVE_UTI, _ADM_ACTIVE_ENF, _ADM_DISCHARGED, _ADM_NO_WEIGHT, _ADM_MULTI_AVAL]
     for adm in _test_adms:
         session.execute(
             text("DELETE FROM demo.nutricional_avaliacao WHERE nratendimento = :adm"),
@@ -764,4 +801,68 @@ def test_filter_ala_case_insensitive(client, analyst_headers):
     ids_upper = sorted([p["id"] for p in data_upper])
     ids_lower = sorted([p["id"] for p in data_lower])
     assert ids_upper == ids_lower
+
+
+# ── US-BE-18: conduta e hist ──────────────────────────────────────────────────
+
+def test_conduta_null_when_no_assessment(client, analyst_headers):
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    data = response.get_json()["data"]
+
+    enf = _find_patient(data, _ADM_ACTIVE_ENF)
+    assert enf is not None
+    assert enf["conduta"] is None
+    assert enf["hist"] == []
+
+
+def test_hist_has_one_entry_for_uti_patient(client, analyst_headers):
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    data = response.get_json()["data"]
+
+    uti = _find_patient(data, _ADM_ACTIVE_UTI)
+    assert uti is not None
+    assert uti["conduta"] == "Dieta hipercalorica"
+    assert len(uti["hist"]) == 1
+
+    entry = uti["hist"][0]
+    assert entry["c"] == "Dieta hipercalorica"
+    assert entry["p"] == "Nutr."
+    assert "h" in entry
+    assert "freq" in entry
+    assert "ing" in entry
+
+
+def test_hist_ordered_most_recent_first(client, analyst_headers):
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    data = response.get_json()["data"]
+
+    p = _find_patient(data, _ADM_MULTI_AVAL)
+    assert p is not None
+    assert p["conduta"] == "Conduta mais recente"
+    assert len(p["hist"]) == 3
+
+    assert p["hist"][0]["c"] == "Conduta mais recente"
+    assert p["hist"][1]["c"] == "Conduta intermediaria"
+    assert p["hist"][2]["c"] == "Conduta antiga"
+
+
+def test_hist_freq_and_ing_fields(client, analyst_headers):
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    data = response.get_json()["data"]
+
+    p = _find_patient(data, _ADM_MULTI_AVAL)
+    assert p is not None
+
+    most_recent = p["hist"][0]
+    assert most_recent["freq"] == "12h"
+    assert most_recent["ing"] == 100
+
+
+def test_hist_is_always_list(client, analyst_headers):
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    data = response.get_json()["data"]
+
+    for patient in data:
+        assert isinstance(patient["hist"], list)
+        assert patient["hist"] is not None
 

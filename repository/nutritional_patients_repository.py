@@ -21,7 +21,7 @@ def get_patients(setor=None, ala=None):
     # Derive ala label from segment type
     ala_label = case(
         (Segment.type == SegmentTypeEnum.ICU.value, literal("UTI")),
-        else_=Segment.description,
+        else_=literal("Enfermaria"),
     ).label("ala")
 
     # haval
