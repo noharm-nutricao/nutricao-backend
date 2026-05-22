@@ -103,7 +103,7 @@ jobs:
           DB_USER: postgres
           DB_PASSWORD: ""
         run: |
-          python -m pytest tests/unit/test_nutritional*.py tests/integration/test_nutritional*.py --cov=services/nutritional --cov=routes/nutritional --cov-report=xml:coverage.xml
+          python -m pytest tests/unit/test_nutritional*.py tests/integration/test_nutritional*.py --cov=. --cov-report=xml:coverage.xml
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@ba3875ecf642b2129de2b589510c81a8b53dbf4e  # master 2026-05-22

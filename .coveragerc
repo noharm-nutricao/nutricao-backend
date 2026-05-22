@@ -1,6 +1,8 @@
 [run]
-relative_files = True
 omit = */__init__.py
 
 [report]
+include =
+    services/nutritional/*
+    routes/nutritional/*
 omit = */__init__.py
