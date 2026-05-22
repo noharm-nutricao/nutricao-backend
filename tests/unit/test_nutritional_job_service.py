@@ -53,12 +53,16 @@ class TestRecalculateNutritionalScores:
         ), patch(
             "services.nutritional.nutritional_job_service.nutritional_patient_service.recalculate_mnutric",
             return_value={"total": 5},
-        ), patch(
+        ) as mock_mnutric, patch(
             "services.nutritional.nutritional_job_service.nutritional_nrs_service.recalculate_nrs",
-        ), patch(
+        ) as mock_nrs, patch(
             "services.nutritional.nutritional_job_service.db.session.commit",
-        ):
+        ) as mock_commit:
             job_service.recalculate_nutritional_scores(flask_app)
+
+        assert mock_nrs.call_count == 2       # ambos os pacientes passam por NRS
+        assert mock_mnutric.call_count == 1   # apenas paciente ICU passa por mNUTRIC
+        assert mock_commit.call_count == 2    # commit por paciente processado com sucesso
 
     def test_tolerates_single_patient_failure(self):
         """An exception on one patient must not interrupt the rest of the batch."""
