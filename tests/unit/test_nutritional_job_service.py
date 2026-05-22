@@ -3,20 +3,31 @@
 Tests cover:
 - recalculate_nutritional_scores: tolerance to per-patient failures, protocol
   selection (MNUTRIC vs NRS2002), processing counters and logging.
-- init_scheduler: respects SCHEDULER_ENABLED flag, registers job with the
-  correct interval, does not start when disabled.
+- init_scheduler: respects SCHEDULER_ENABLED flag, starts daemon thread with
+  correct name, guards against Werkzeug reloader double-start.
 """
 
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 import services.nutritional.nutritional_job_service as job_service
+from mobile import app as flask_app
 
 
-def _make_patient(nratendimento, is_icu):
-    return SimpleNamespace(nratendimento=nratendimento, is_icu=is_icu)
+def _make_patient(nratendimento, is_icu, tp_segmento=None, dtnascimento=None, idcid=None):
+    return SimpleNamespace(
+        nratendimento=nratendimento,
+        is_icu=is_icu,
+        tp_segmento=tp_segmento,
+        dtnascimento=dtnascimento,
+        idcid=idcid,
+    )
+
+
+def _icu_side_effect(patients):
+    """Returns is_uti_wrapper side_effect that mirrors patient.is_icu by nratendimento."""
+    m = {p.nratendimento: p.is_icu for p in patients}
+    return lambda n, **kw: m.get(n, False)
 
 
 # ---------------------------------------------------------------------------
@@ -30,113 +41,106 @@ class TestRecalculateNutritionalScores:
         patients = [_make_patient(1, False), _make_patient(2, True)]
 
         with patch(
+            "services.nutritional.nutritional_job_service._get_active_schemas",
+            return_value=["demo"],
+        ), patch(
             "services.nutritional.nutritional_job_service.nutritional_repository.get_active_admissions",
             return_value=patients,
         ), patch(
+            "services.nutritional.nutritional_job_service.is_uti_wrapper",
+            side_effect=_icu_side_effect(patients),
+        ), patch(
             "services.nutritional.nutritional_job_service.nutritional_patient_service.recalculate_mnutric",
             return_value={"total": 5},
-        ), patch(
+        ) as mock_mnutric, patch(
+            "services.nutritional.nutritional_job_service.nutritional_nrs_service.recalculate_nrs",
+        ) as mock_nrs, patch(
             "services.nutritional.nutritional_job_service.db.session.commit",
-        ):
-            job_service.recalculate_nutritional_scores()
+        ) as mock_commit:
+            job_service.recalculate_nutritional_scores(flask_app)
+
+        assert mock_nrs.call_count == 2       # ambos os pacientes passam por NRS
+        assert mock_mnutric.call_count == 1   # apenas paciente ICU passa por mNUTRIC
+        assert mock_commit.call_count == 2    # commit por paciente processado com sucesso
 
     def test_tolerates_single_patient_failure(self):
         """An exception on one patient must not interrupt the rest of the batch."""
         patients = [
             _make_patient(1, False),
-            _make_patient(2, True),   # this one will fail
+            _make_patient(2, True),   # this one will fail (ICU → calls mnutric)
             _make_patient(3, False),
         ]
 
         with patch(
+            "services.nutritional.nutritional_job_service._get_active_schemas",
+            return_value=["demo"],
+        ), patch(
             "services.nutritional.nutritional_job_service.nutritional_repository.get_active_admissions",
             return_value=patients,
         ), patch(
+            "services.nutritional.nutritional_job_service.is_uti_wrapper",
+            side_effect=_icu_side_effect(patients),
+        ), patch(
             "services.nutritional.nutritional_job_service.nutritional_patient_service.recalculate_mnutric",
             side_effect=ValueError("Simulated error"),
+        ), patch(
+            "services.nutritional.nutritional_job_service.nutritional_nrs_service.recalculate_nrs",
         ), patch(
             "services.nutritional.nutritional_job_service.db.session.commit",
         ), patch(
             "services.nutritional.nutritional_job_service.db.session.rollback",
         ), patch.object(job_service.logger, "error") as mock_error:
-            job_service.recalculate_nutritional_scores()
+            job_service.recalculate_nutritional_scores(flask_app)
 
         assert mock_error.call_count == 1
-
-    def test_logs_success_for_icu_patient_with_valid_recalculation(self):
-        patients = [_make_patient(10, True)]
-
-        with patch(
-            "services.nutritional.nutritional_job_service.nutritional_repository.get_active_admissions",
-            return_value=patients,
-        ), patch(
-            "services.nutritional.nutritional_job_service.nutritional_patient_service.recalculate_mnutric",
-            return_value={"total": 5},
-        ), patch(
-            "services.nutritional.nutritional_job_service.db.session.commit",
-        ) as mock_commit, patch.object(job_service.logger, "info") as mock_info:
-            job_service.recalculate_nutritional_scores()
-
-        mock_commit.assert_called_once()
-        assert any(
-            "mNUTRIC recalculado com sucesso" in str(call)
-            for call in mock_info.call_args_list
-        )
 
     def test_logs_error_for_icu_patient_when_recalculation_returns_none(self):
         patients = [_make_patient(10, True)]
 
         with patch(
+            "services.nutritional.nutritional_job_service._get_active_schemas",
+            return_value=["demo"],
+        ), patch(
             "services.nutritional.nutritional_job_service.nutritional_repository.get_active_admissions",
             return_value=patients,
+        ), patch(
+            "services.nutritional.nutritional_job_service.is_uti_wrapper",
+            side_effect=_icu_side_effect(patients),
         ), patch(
             "services.nutritional.nutritional_job_service.nutritional_patient_service.recalculate_mnutric",
             return_value=None,
         ), patch(
+            "services.nutritional.nutritional_job_service.nutritional_nrs_service.recalculate_nrs",
+        ), patch(
             "services.nutritional.nutritional_job_service.db.session.commit",
         ) as mock_commit, patch.object(job_service.logger, "error") as mock_error:
-            job_service.recalculate_nutritional_scores()
+            job_service.recalculate_nutritional_scores(flask_app)
 
         mock_commit.assert_not_called()
         assert any("retorno None" in str(call) for call in mock_error.call_args_list)
-
-    def test_icu_patient_takes_mnutric_branch(self):
-        """Patients with is_icu=True must enter the MNUTRIC branch (not NRS)."""
-        icu_patient = _make_patient(10, True)
-        non_icu_patient = _make_patient(20, False)
-        visited = []
-
-        original_fn = job_service.recalculate_nutritional_scores
-
-        # Patch the function body to record which branch each patient takes
-        def patched():
-            patients = [icu_patient, non_icu_patient]
-            for p in patients:
-                visited.append(("MNUTRIC" if p.is_icu else "NRS2002", p.nratendimento))
-
-        with patch(
-            "services.nutritional.nutritional_job_service.nutritional_repository.get_active_admissions",
-            return_value=[icu_patient, non_icu_patient],
-        ):
-            patched()
-
-        assert visited[0] == ("MNUTRIC", 10)
-        assert visited[1] == ("NRS2002", 20)
 
     def test_logs_summary_after_run(self):
         """A summary info log must be emitted at the end of each execution."""
         patients = [_make_patient(1, False), _make_patient(2, True)]
 
         with patch(
+            "services.nutritional.nutritional_job_service._get_active_schemas",
+            return_value=["demo"],
+        ), patch(
             "services.nutritional.nutritional_job_service.nutritional_repository.get_active_admissions",
             return_value=patients,
+        ), patch(
+            "services.nutritional.nutritional_job_service.is_uti_wrapper",
+            side_effect=_icu_side_effect(patients),
         ), patch(
             "services.nutritional.nutritional_job_service.nutritional_patient_service.recalculate_mnutric",
             return_value={"total": 5},
         ), patch(
+            "services.nutritional.nutritional_job_service.nutritional_nrs_service.recalculate_nrs",
+        ), patch(
             "services.nutritional.nutritional_job_service.db.session.commit",
         ), patch.object(job_service.logger, "info") as mock_info:
-            job_service.recalculate_nutritional_scores()
+            job_service.recalculate_nutritional_scores(flask_app)
 
         assert mock_info.call_count >= 2
         last_call = str(mock_info.call_args_list[-1])
@@ -145,10 +149,13 @@ class TestRecalculateNutritionalScores:
     def test_empty_admission_list_runs_without_error(self):
         """Job must complete normally when there are no active admissions."""
         with patch(
+            "services.nutritional.nutritional_job_service._get_active_schemas",
+            return_value=["demo"],
+        ), patch(
             "services.nutritional.nutritional_job_service.nutritional_repository.get_active_admissions",
             return_value=[],
         ):
-            job_service.recalculate_nutritional_scores()
+            job_service.recalculate_nutritional_scores(flask_app)
 
 
 # ---------------------------------------------------------------------------
@@ -158,98 +165,55 @@ class TestRecalculateNutritionalScores:
 
 class TestInitScheduler:
     def test_does_not_start_when_disabled(self):
-        """Scheduler must not start when SCHEDULER_ENABLED is False."""
+        """Scheduler must not start a thread when SCHEDULER_ENABLED is False."""
         app = MagicMock()
         app.debug = False
-        mock_scheduler = MagicMock()
 
-        with patch.object(job_service, "scheduler", mock_scheduler), patch(
+        with patch(
             "services.nutritional.nutritional_job_service.Config"
-        ) as mock_config:
+        ) as mock_config, patch(
+            "services.nutritional.nutritional_job_service.threading.Thread"
+        ) as mock_thread_cls:
             mock_config.SCHEDULER_ENABLED = False
 
             job_service.init_scheduler(app)
 
-        mock_scheduler.start.assert_not_called()
-        mock_scheduler.add_job.assert_not_called()
+        mock_thread_cls.assert_not_called()
 
-    def test_starts_when_enabled(self):
-        """Scheduler must start when SCHEDULER_ENABLED is True."""
+    def test_starts_daemon_thread_when_enabled(self):
+        """Scheduler must launch a daemon thread named 'nutritional-recalc'."""
         app = MagicMock()
         app.debug = False
-        mock_scheduler = MagicMock()
 
-        with patch.object(job_service, "scheduler", mock_scheduler), patch(
+        with patch(
             "services.nutritional.nutritional_job_service.Config"
-        ) as mock_config:
+        ) as mock_config, patch(
+            "services.nutritional.nutritional_job_service.threading.Thread"
+        ) as mock_thread_cls:
             mock_config.SCHEDULER_ENABLED = True
             mock_config.SCHEDULER_INTERVAL_MINUTES = 15
 
-            job_service.init_scheduler(app)
-
-        mock_scheduler.add_job.assert_called_once()
-        mock_scheduler.start.assert_called_once()
-
-    def test_registers_job_with_correct_interval(self):
-        """Job must be registered with the configured interval in minutes."""
-        app = MagicMock()
-        app.debug = False
-        mock_scheduler = MagicMock()
-
-        with patch.object(job_service, "scheduler", mock_scheduler), patch(
-            "services.nutritional.nutritional_job_service.Config"
-        ) as mock_config:
-            mock_config.SCHEDULER_ENABLED = True
-            mock_config.SCHEDULER_INTERVAL_MINUTES = 30
+            mock_thread = MagicMock()
+            mock_thread_cls.return_value = mock_thread
 
             job_service.init_scheduler(app)
 
-        _, kwargs = mock_scheduler.add_job.call_args
-        assert kwargs.get("minutes") == 30
-
-    def test_registers_job_with_correct_id(self):
-        """Job must be registered with the id 'nutritional_score_recalc'."""
-        app = MagicMock()
-        app.debug = False
-        mock_scheduler = MagicMock()
-
-        with patch.object(job_service, "scheduler", mock_scheduler), patch(
-            "services.nutritional.nutritional_job_service.Config"
-        ) as mock_config:
-            mock_config.SCHEDULER_ENABLED = True
-            mock_config.SCHEDULER_INTERVAL_MINUTES = 15
-
-            job_service.init_scheduler(app)
-
-        _, kwargs = mock_scheduler.add_job.call_args
-        assert kwargs.get("id") == "nutritional_score_recalc"
-
-    def test_uses_interval_trigger(self):
-        """Job must use 'interval' as trigger type."""
-        app = MagicMock()
-        app.debug = False
-        mock_scheduler = MagicMock()
-
-        with patch.object(job_service, "scheduler", mock_scheduler), patch(
-            "services.nutritional.nutritional_job_service.Config"
-        ) as mock_config:
-            mock_config.SCHEDULER_ENABLED = True
-            mock_config.SCHEDULER_INTERVAL_MINUTES = 15
-
-            job_service.init_scheduler(app)
-
-        _, kwargs = mock_scheduler.add_job.call_args
-        assert kwargs.get("trigger") == "interval"
+        mock_thread_cls.assert_called_once()
+        _, kwargs = mock_thread_cls.call_args
+        assert kwargs.get("daemon") is True
+        assert kwargs.get("name") == "nutritional-recalc"
+        mock_thread.start.assert_called_once()
 
     def test_werkzeug_reloader_guard(self):
         """Scheduler must not start in the parent process of the Werkzeug reloader."""
         app = MagicMock()
         app.debug = True  # debug mode triggers reloader
-        mock_scheduler = MagicMock()
 
-        with patch.object(job_service, "scheduler", mock_scheduler), patch(
+        with patch(
             "services.nutritional.nutritional_job_service.Config"
-        ) as mock_config, patch.dict(
+        ) as mock_config, patch(
+            "services.nutritional.nutritional_job_service.threading.Thread"
+        ) as mock_thread_cls, patch.dict(
             "os.environ", {}, clear=True  # WERKZEUG_RUN_MAIN not set
         ):
             mock_config.SCHEDULER_ENABLED = True
@@ -257,5 +221,4 @@ class TestInitScheduler:
 
             job_service.init_scheduler(app)
 
-        # Parent process must not start the scheduler
-        mock_scheduler.start.assert_not_called()
+        mock_thread_cls.assert_not_called()
