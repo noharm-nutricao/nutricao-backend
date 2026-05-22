@@ -7,7 +7,6 @@ Tests cover:
   correct name, guards against Werkzeug reloader double-start.
 """
 
-import threading
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
