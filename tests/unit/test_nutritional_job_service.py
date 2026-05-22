@@ -62,6 +62,8 @@ class TestRecalculateNutritionalScores:
         assert mock_nrs.call_count == 2       # ambos os pacientes passam por NRS
         assert mock_mnutric.call_count == 1   # apenas paciente ICU passa por mNUTRIC
         assert mock_commit.call_count == 2    # commit por paciente processado com sucesso
+        for call_item, patient in zip(mock_nrs.call_args_list, patients, strict=True):
+            assert call_item.kwargs.get("is_icu") == patient.is_icu
 
     def test_tolerates_single_patient_failure(self):
         """An exception on one patient must not interrupt the rest of the batch."""

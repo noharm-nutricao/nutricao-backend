@@ -193,57 +193,52 @@ def test_score_nrs_component_b_delegates_to_internal(monkeypatch: pytest.MonkeyP
     internal_mock = MagicMock(return_value=2)
     monkeypatch.setattr(svc, "_score_nrs_component_b", internal_mock)
 
-    result = svc.score_nrs_component_b(10, "A123")
+    result = svc.score_nrs_component_b(True, "A123")
 
     assert result == 2
-    internal_mock.assert_called_once_with(10, "A123", svc.is_uti, svc.get_cid_mappings_cached)
+    internal_mock.assert_called_once_with(True, "A123", svc.get_cid_mappings_cached)
 
 
 # 7) _score_nrs_component_b
 
 def test_internal_component_b_returns_3_for_icu() -> None:
-    is_uti_fn = MagicMock(return_value=True)
     get_mappings_fn = MagicMock()
 
-    result = svc._score_nrs_component_b(1, "A123", is_uti_fn, get_mappings_fn)
+    result = svc._score_nrs_component_b(True, "A123", get_mappings_fn)
 
     assert result == 3
     get_mappings_fn.assert_not_called()
 
 
 def test_internal_component_b_returns_0_for_empty_cid() -> None:
-    is_uti_fn = MagicMock(return_value=False)
     get_mappings_fn = MagicMock()
 
-    result = svc._score_nrs_component_b(1, "", is_uti_fn, get_mappings_fn)
+    result = svc._score_nrs_component_b(False, "", get_mappings_fn)
 
     assert result == 0
     get_mappings_fn.assert_not_called()
 
 
 def test_internal_component_b_uses_prefix_override(cid_mappings: svc.CidMappings) -> None:
-    is_uti_fn = MagicMock(return_value=False)
     get_mappings_fn = MagicMock(return_value=cid_mappings)
 
-    result = svc._score_nrs_component_b(1, "A1299", is_uti_fn, get_mappings_fn)
+    result = svc._score_nrs_component_b(False, "A1299", get_mappings_fn)
 
     assert result == 2
 
 
 def test_internal_component_b_falls_back_to_chapter_score(cid_mappings: svc.CidMappings) -> None:
-    is_uti_fn = MagicMock(return_value=False)
     get_mappings_fn = MagicMock(return_value=cid_mappings)
 
-    result = svc._score_nrs_component_b(1, "C991", is_uti_fn, get_mappings_fn)
+    result = svc._score_nrs_component_b(False, "C991", get_mappings_fn)
 
     assert result == 0
 
 
 def test_internal_component_b_returns_zero_when_chapter_not_mapped() -> None:
-    is_uti_fn = MagicMock(return_value=False)
     get_mappings_fn = MagicMock(return_value=svc.CidMappings(overrides={}, chapters={}))
 
-    result = svc._score_nrs_component_b(1, "Z991", is_uti_fn, get_mappings_fn)
+    result = svc._score_nrs_component_b(False, "Z991", get_mappings_fn)
 
     assert result == 0
 
@@ -251,15 +246,31 @@ def test_internal_component_b_returns_zero_when_chapter_not_mapped() -> None:
 def test_internal_component_b_len_lt_3_uses_chapter_score(
     cid_mappings: svc.CidMappings,
 ) -> None:
-    is_uti_fn = MagicMock(return_value=False)
     get_mappings_fn = MagicMock(return_value=cid_mappings)
 
-    result = svc._score_nrs_component_b(1, "A", is_uti_fn, get_mappings_fn)
+    result = svc._score_nrs_component_b(False, "A", get_mappings_fn)
 
     assert result == 1
 
 
-# 8) calculate_age
+# 8) classify_nrs_score
+
+@pytest.mark.parametrize(
+    "total,expected",
+    [
+        (0, "bx"),
+        (1, "md"),
+        (2, "md"),
+        (3, "al"),
+        (4, "al"),
+        (5, "cr"),
+    ],
+)
+def test_classify_nrs_score_mapping(total: int, expected: str) -> None:
+    assert svc.classify_nrs_score(total) == expected
+
+
+# 9) calculate_age
 
 @pytest.mark.parametrize(
     "today,birthdate,expected_age",
@@ -303,6 +314,7 @@ def test_build_nrs_update_with_nrs_row_uses_row_timestamp(
         patient,
         triagem,
         nrs_row,
+        False,
         score_nrs_component_a_fn=score_a_fn,
         score_nrs_component_b_fn=score_b_fn,
         calc_age_fn=calc_age_fn,
@@ -314,11 +326,12 @@ def test_build_nrs_update_with_nrs_row_uses_row_timestamp(
     assert dto.nrs_doenca == 1
     assert dto.nrs_idade == 1
     assert dto.nrs_total == 4
+    assert dto.classificacao == "al"
     assert dto.nrs_completo is True
     assert dto.nrs_ref_at == nrs_row.updated_at
     assert dto.calculado_at == now
     score_a_fn.assert_called_once_with(nrs_row)
-    score_b_fn.assert_called_once_with(patient.admissionNumber, patient.id_icd)
+    score_b_fn.assert_called_once_with(False, patient.id_icd)
 
 
 def test_build_nrs_update_without_nrs_row_uses_triagem_ref(
@@ -335,6 +348,7 @@ def test_build_nrs_update_without_nrs_row_uses_triagem_ref(
         patient,
         triagem,
         None,
+        True,
         score_nrs_component_a_fn=score_a_fn,
         score_nrs_component_b_fn=score_b_fn,
         calc_age_fn=calc_age_fn,
@@ -346,6 +360,7 @@ def test_build_nrs_update_without_nrs_row_uses_triagem_ref(
     assert dto.nrs_doenca == 2
     assert dto.nrs_idade == 0
     assert dto.nrs_total == 2
+    assert dto.classificacao == "md"
     assert dto.nrs_completo is False
     assert dto.nrs_ref_at == triagem.nrs_ref_at
     assert dto.calculado_at == now
@@ -370,6 +385,7 @@ def test_recalculate_internal_calls_dependencies_and_updates(
 
     svc.__recalculate_nrs(
         patient,
+        False,
         get_or_create_triagem_fn=get_or_create_fn,
         nutritional_nrs_repo_fn=get_nrs_fn,
         updater_func=updater_fn,
@@ -406,6 +422,7 @@ def test_recalculate_internal_without_nrs_marks_incomplete(
 
     svc.__recalculate_nrs(
         patient,
+        True,
         get_or_create_triagem_fn=get_or_create_fn,
         nutritional_nrs_repo_fn=get_nrs_fn,
         updater_func=updater_fn,
@@ -428,17 +445,13 @@ def test_recalculate_nrs_delegates_to_internal(monkeypatch: pytest.MonkeyPatch, 
     internal_mock = MagicMock(return_value=None)
     monkeypatch.setattr(svc, "__recalculate_nrs", internal_mock)
 
-    result = svc.recalculate_nrs(patient)
+    result = svc.recalculate_nrs(patient, True)
 
     assert result is None
-    internal_mock.assert_called_once_with(patient)
+    internal_mock.assert_called_once_with(patient, True)
 
 
 # Casos de Teste Obrigatórios (matriz funcional de admissão)
-
-
-def _classificacao_por_total(nrs_total: int) -> str:
-    return "al" if nrs_total >= 3 else "bx"
 
 
 @pytest.mark.parametrize(
@@ -550,8 +563,9 @@ def test_casos_obrigatorios_nrs(
         patient,
         triagem,
         nrs_row,
+        comp_b == 3,
         score_nrs_component_a_fn=svc.score_nrs_component_a,
-        score_nrs_component_b_fn=lambda admission_number, cid: comp_b,
+        score_nrs_component_b_fn=lambda is_icu, cid: comp_b,
         calc_age_fn=lambda _: idade,
         now_fn=lambda: datetime(2026, 4, 11, 12, 0, 0),
     )
@@ -560,7 +574,7 @@ def test_casos_obrigatorios_nrs(
     assert dto.nrs_doenca == expected_b, cenario
     assert dto.nrs_idade == expected_c, cenario
     assert dto.nrs_total == expected_total, cenario
-    assert _classificacao_por_total(dto.nrs_total) == expected_classe, cenario
+    assert dto.classificacao == expected_classe, cenario
     assert dto.nrs_completo is expected_completo, cenario
 
 
@@ -598,21 +612,19 @@ def test_is_uti_helper_additional_negative_patterns(department: str) -> None:
 
 
 def test_internal_component_b_uses_uppercase_chapter_for_lowercase_cid() -> None:
-    is_uti_fn = MagicMock(return_value=False)
     mappings = svc.CidMappings(overrides={}, chapters={"A": 2})
     get_mappings_fn = MagicMock(return_value=mappings)
 
-    result = svc._score_nrs_component_b(1, "a991", is_uti_fn, get_mappings_fn)
+    result = svc._score_nrs_component_b(False, "a991", get_mappings_fn)
 
     assert result == 2
 
 
 def test_internal_component_b_prefers_override_over_chapter() -> None:
-    is_uti_fn = MagicMock(return_value=False)
     mappings = svc.CidMappings(overrides={"A12": 1}, chapters={"A": 3})
     get_mappings_fn = MagicMock(return_value=mappings)
 
-    result = svc._score_nrs_component_b(1, "A123", is_uti_fn, get_mappings_fn)
+    result = svc._score_nrs_component_b(False, "A123", get_mappings_fn)
 
     assert result == 1
 
@@ -630,8 +642,9 @@ def test_build_nrs_update_with_nrs_row_and_none_score_component_a() -> None:
         patient,
         triagem,
         nrs_row,
+        False,
         score_nrs_component_a_fn=lambda _row: None,
-        score_nrs_component_b_fn=lambda _adm, _cid: 2,
+        score_nrs_component_b_fn=lambda _is_icu, _cid: 2,
         calc_age_fn=lambda _birthdate: 80,
         now_fn=lambda: datetime(2026, 4, 11, 12, 0, 0),
     )
@@ -640,6 +653,7 @@ def test_build_nrs_update_with_nrs_row_and_none_score_component_a() -> None:
     assert dto.nrs_doenca == 2
     assert dto.nrs_idade == 1
     assert dto.nrs_total == 3
+    assert dto.classificacao == "al"
     assert dto.nrs_completo is False
     assert dto.nrs_ref_at == nrs_row.updated_at
 
@@ -660,11 +674,12 @@ def test_recalculate_internal_passes_nrs_row_to_component_a_function() -> None:
 
     svc.__recalculate_nrs(
         patient,
+        False,
         get_or_create_triagem_fn=get_or_create_fn,
         nutritional_nrs_repo_fn=get_nrs_fn,
         updater_func=updater_fn,
         score_nrs_component_a_fn=score_a_fn,
-        score_nrs_component_b_fn=lambda _adm, _cid: 0,
+        score_nrs_component_b_fn=lambda _is_icu, _cid: 0,
         calc_age_fn=lambda _birthdate: 50,
         now_fn=lambda: datetime(2026, 4, 11, 12, 0, 0),
     )
