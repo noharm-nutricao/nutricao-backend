@@ -10,7 +10,6 @@ from models.nutritional import (
     NutritionalScreening,
     NutritionalD7,
     NutritionalGlim,
-    NutritionalAssessment,
 )
 from models.prescription import Patient
 from models.segment import Segment
@@ -52,11 +51,19 @@ def get_patients(setor=None, ala=None):
 
     d7_expr = (d7_subq > 0).label("d7")
 
-    # freq
+    # freq_horas — latest assessment frequencia mapped to hours
+    freq_map = case(
+        (NutritionalAssessment.frequencia == "12h", 12),
+        (NutritionalAssessment.frequencia == "24h", 24),
+        (NutritionalAssessment.frequencia == "48h", 48),
+        (NutritionalAssessment.frequencia == "7d", 168),
+        else_=None,
+    )
+
     last_assessment = (
         db.session.query(
             NutritionalAssessment.nratendimento,
-            NutritionalAssessment.frequencia,
+            freq_map.label("freq_horas"),
         )
         .distinct(NutritionalAssessment.nratendimento)
         .order_by(
@@ -147,7 +154,7 @@ def get_patients(setor=None, ala=None):
     query = (
         db.session.query(
             Patient.admissionNumber.label("id"),
-            last_assessment.c.frequencia.label("freq_horas"),
+            last_assessment.c.freq_horas,
             Patient.bed.label("leito"),
             ala_label,
             Patient.idDepartment.label("fksetor"),
