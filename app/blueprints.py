@@ -32,6 +32,7 @@ from routes.memory import app_mem
 from routes.names import app_names
 from routes.navigation import app_navigation
 from routes.notes import app_note
+from routes.nutritional.nutritional_active_patients import app_nutritional_active_patients
 from routes.outlier import app_out
 from routes.outlier_generate import app_gen
 from routes.patient import app_pat
@@ -62,6 +63,7 @@ from routes.support import app_support
 from routes.tag import app_tag
 from routes.user import app_usr
 from routes.user_admin import app_user_admin
+from routes.nutritional.nutritional_patients import app_nutritional
 
 
 def register_blueprints(app):
@@ -96,6 +98,7 @@ def register_blueprints(app):
     app.register_blueprint(app_navigation)
     app.register_blueprint(app_user_admin)
     app.register_blueprint(app_pres_crud)
+    app.register_blueprint(app_nutritional_active_patients)
 
     # Admin blueprints
     app.register_blueprint(app_admin_freq)
@@ -130,3 +133,13 @@ def register_blueprints(app):
 
     # Regulation blueprints
     app.register_blueprint(app_regulation)
+
+    # Nutritional blueprints
+    from routes.nutritional.nutritional_job import app_nutritional_job
+    from routes.nutritional.nrs_nut import app_nrs_nut
+    from  routes.nutritional.healthz import app_nutritional_health
+
+    app.register_blueprint(app_nutritional_health)
+    app.register_blueprint(app_nutritional)
+    app.register_blueprint(app_nutritional_job)
+    app.register_blueprint(app_nrs_nut)
