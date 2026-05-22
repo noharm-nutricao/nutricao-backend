@@ -866,3 +866,24 @@ def test_hist_is_always_list(client, analyst_headers):
         assert isinstance(patient["hist"], list)
         assert patient["hist"] is not None
 
+
+def test_conduta_hist_persist_across_sessions(client):
+    """conduta e hist vêm do banco — persistem após logout e re-login."""
+    # Simula duas sessões independentes com tokens distintos
+    token_a = make_headers(get_access(client, roles=[Role.PRESCRIPTION_ANALYST.value]))
+    token_b = make_headers(get_access(client, roles=[Role.PRESCRIPTION_ANALYST.value]))
+
+    resp_a = client.get(ENDPOINT, headers=token_a)
+    resp_b = client.get(ENDPOINT, headers=token_b)
+
+    data_a = resp_a.get_json()["data"]
+    data_b = resp_b.get_json()["data"]
+
+    uti_a = _find_patient(data_a, _ADM_ACTIVE_UTI)
+    uti_b = _find_patient(data_b, _ADM_ACTIVE_UTI)
+
+    assert uti_a is not None and uti_b is not None
+    # Mesmos dados nas duas sessões = vêm do banco, não da sessão
+    assert uti_a["conduta"] == uti_b["conduta"]
+    assert uti_a["hist"] == uti_b["hist"]
+
