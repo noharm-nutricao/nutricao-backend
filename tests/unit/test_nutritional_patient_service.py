@@ -254,7 +254,7 @@ def test_recalculate_mnutric_restores_dimension_scores_and_normalizes_patient():
         return_value=screening,
     ), patch(
         "services.nutritional.nutritional_patient_service.nutritional_repository.update_mnutric_scores",
-    ):
+    ) as mock_update:
         result = service.recalculate_mnutric(source_patient)
 
     assert result["dados_incompletos"] is False
@@ -263,6 +263,7 @@ def test_recalculate_mnutric_restores_dimension_scores_and_normalizes_patient():
     assert result["comorbity"] == 1
     assert result["age"] == 2
     assert result["daysUTI"] == 0
+    mock_update.assert_called_once_with(123, result)
 
 
 @pytest.mark.parametrize(
@@ -376,11 +377,15 @@ def test_calculate_mnutric_logs_error_and_still_returns_when_save_fails():
     with patch(
         "services.nutritional.nutritional_patient_service.save_manual_mnutric",
         side_effect=RuntimeError("DB error"),
-    ):
+    ), patch(
+        "services.nutritional.nutritional_patient_service.logging",
+    ) as mock_logging:
         result = service.calculate_mnutric(patient, apache=0, sofa=0)
 
     assert result is not None
     assert "total" in result
+    mock_logging.error.assert_called_once()
+    assert "42" in str(mock_logging.error.call_args)
 
 
 def test_calculate_mnutric_skips_save_when_admission_number_is_none():

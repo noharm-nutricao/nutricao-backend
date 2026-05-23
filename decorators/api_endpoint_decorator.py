@@ -161,7 +161,7 @@ def api_endpoint(download_headers=None, is_admin=False, include_total=False):
                     "status": "error",
                     "message": "Parâmetros inválidos",
                     "code": 0,
-                    "validations": e.errors(),
+                    "validations": json.loads(e.json()),
                 }, status.HTTP_400_BAD_REQUEST
 
             except Exception as e:

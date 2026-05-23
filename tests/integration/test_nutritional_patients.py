@@ -71,51 +71,6 @@ def _ensure_schema():
     session.execute(
         text("ALTER TABLE demo.pessoa ADD COLUMN IF NOT EXISTS leito VARCHAR(16)")
     )
-
-    ddl_statements = [
-        """CREATE TABLE IF NOT EXISTS demo.nutricional_avaliacao (
-            idnutricional_avaliacao BIGSERIAL PRIMARY KEY,
-            nratendimento BIGINT NOT NULL,
-            idusuario INTEGER,
-            conduta TEXT,
-            created_at TIMESTAMP NOT NULL DEFAULT NOW()
-        )""",
-        """CREATE TABLE IF NOT EXISTS demo.nutricional_d7 (
-            idnutricional_d7 BIGSERIAL PRIMARY KEY,
-            nratendimento BIGINT NOT NULL,
-            concluido BOOLEAN NOT NULL DEFAULT FALSE,
-            dt_prevista TIMESTAMP NOT NULL,
-            idusuario INTEGER,
-            created_at TIMESTAMP NOT NULL DEFAULT NOW()
-        )""",
-        """CREATE TABLE IF NOT EXISTS demo.nutricional_triagem (
-            idnutricional_triagem BIGSERIAL PRIMARY KEY,
-            nratendimento BIGINT NOT NULL,
-            protocolo VARCHAR(10) NOT NULL,
-            classificacao TEXT,
-            created_at TIMESTAMP NOT NULL DEFAULT NOW()
-        )""",
-        """CREATE TABLE IF NOT EXISTS demo.nutricional_glim (
-            idnutricional_glim BIGSERIAL PRIMARY KEY,
-            nratendimento BIGINT NOT NULL,
-            diagnostico TEXT,
-            fenotipos TEXT[],
-            etiologias TEXT[],
-            idusuario INTEGER,
-            created_at TIMESTAMP NOT NULL DEFAULT NOW()
-        )""",
-        """CREATE TABLE IF NOT EXISTS demo.nutricional_alerta (
-            idnutricional_alerta BIGSERIAL PRIMARY KEY,
-            nratendimento BIGINT NOT NULL,
-            alerta TEXT NOT NULL,
-            ativo BOOLEAN NOT NULL DEFAULT TRUE,
-            created_at TIMESTAMP NOT NULL DEFAULT NOW()
-        )""",
-    ]
-
-    for ddl in ddl_statements:
-        session.execute(text(ddl))
-
     session_commit()
 
 

@@ -161,7 +161,7 @@ class TestRecalculateNutritionalScores:
         assert any("retorno None" in str(call) for call in mock_error.call_args_list)
 
     def test_icu_patient_takes_mnutric_branch(self):
-        """Patients with is_icu=True must enter the MNUTRIC branch (not NRS)."""
+        """ICU patients run MNUTRIC in addition to NRS; non-ICU run only NRS."""
         icu_patient = _make_patient(10, True)
         non_icu_patient = _make_patient(20, False)
         patients = [icu_patient, non_icu_patient]
@@ -299,7 +299,7 @@ class TestInitScheduler:
         assert kwargs.get("args")[1] == 30 * 60
 
     def test_registers_job_with_correct_id(self):
-        """Job must be registered with the id 'nutritional_score_recalc'."""
+        """Thread must be registered with the name 'nutritional-recalc'."""
         app = MagicMock()
         app.debug = False
 

@@ -274,9 +274,6 @@ def test_post_assessment_prox_visita_frequencia_mapping(client, analyst_headers)
     assert data["prox_visita"] == "7d"
 
 
-@pytest.mark.skip(
-    reason="Pydantic v2 inclui ValueError em ctx.error não-serializável: decorator gera TypeError em vez de 400"
-)
 def test_post_assessment_rejects_empty_conduta(client, analyst_headers):
     response = client.post(
         _POST_ENDPOINT,
@@ -287,9 +284,6 @@ def test_post_assessment_rejects_empty_conduta(client, analyst_headers):
     assert response.status_code == 400
 
 
-@pytest.mark.skip(
-    reason="Pydantic v2 inclui ValueError em ctx.error não-serializável: decorator gera TypeError em vez de 400"
-)
 def test_post_assessment_rejects_invalid_prox_visita(client, analyst_headers):
     response = client.post(
         _POST_ENDPOINT,
@@ -300,9 +294,6 @@ def test_post_assessment_rejects_invalid_prox_visita(client, analyst_headers):
     assert response.status_code == 400
 
 
-@pytest.mark.skip(
-    reason="Pydantic v2 inclui ValueError em ctx.error não-serializável: decorator gera TypeError em vez de 400"
-)
 def test_post_assessment_rejects_ingestao_out_of_range(client, analyst_headers):
     response = client.post(
         _POST_ENDPOINT,
