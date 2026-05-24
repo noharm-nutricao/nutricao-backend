@@ -38,6 +38,11 @@ def _get_or_create_triagem(
     triagem: Optional[NutritionalScreening] = (
         session.query(NutritionalScreening)
         .filter(NutritionalScreening.nratendimento == nratendimento)
+        .filter(NutritionalScreening.protocolo == "NRS2002")
+        .order_by(
+            NutritionalScreening.calculado_at.desc().nullslast(),
+            NutritionalScreening.id.desc(),
+        )
         .first()
     )
     if triagem:
@@ -58,8 +63,8 @@ def _get_or_create_triagem(
         mn_comor=None,
         mn_dias=None,
         mn_total=None,
-        mn_apache_manual=None,
-        mn_sofa_manual=None,
+        mn_apache_manual=False,
+        mn_sofa_manual=False,
         classificacao=None,
         calculado_at=None,
     )
