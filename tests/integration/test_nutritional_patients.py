@@ -42,6 +42,7 @@ REQUIRED_FIELDS = {
     "pri",
     "sev",
     "hist",
+    "freq_horas",
 }
 
 
@@ -359,7 +360,7 @@ def test_protocolo_derivation(client, analyst_headers):
     assert uti["ala"] == "UTI"
 
     assert enf["protocolo"] == "NRS2002"
-    assert enf["ala"] != "UTI"
+    assert enf["ala"] == "Seg Enf Teste Nutri"
 
 
 def test_imc_calculation(client, analyst_headers):
@@ -611,6 +612,8 @@ def test_field_types_validation(client, analyst_headers):
     assert isinstance(uti["glim_etiol"], list)
     assert isinstance(uti["inst"], list)
     assert isinstance(uti["hist"], list)
+
+    assert uti["freq_horas"] is None or isinstance(uti["freq_horas"], int)
 
 
 def test_nullable_fields_allow_none(client, analyst_headers):

@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
   docker-build-and-test:
@@ -20,7 +19,7 @@ jobs:
 
       - name: Clonar repo do database
         run: |
-          git clone https://github.com/noharm-nutricao/nutricao-database.git database
+          git clone --branch develop https://github.com/noharm-nutricao/nutricao-database.git database
 
       - name: Build containers
         run: docker compose -f docker-compose.ci.yml build
@@ -58,6 +57,9 @@ jobs:
 
   sonar:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     services:
       postgres:
         image: postgres:16-alpine
@@ -114,7 +116,7 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
       - name: Comentar resultado no PR
-        if: github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request'
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
         with:
           script: |
