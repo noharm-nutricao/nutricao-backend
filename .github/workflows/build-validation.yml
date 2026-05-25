@@ -92,11 +92,10 @@ jobs:
       - name: Setup PostgreSQL
         run: |
           git clone --branch develop https://github.com/noharm-nutricao/nutricao-database
-          psql -h localhost -U postgres -d noharm -f nutricao-database/migrations/flyway/V1__create_public_schema.sql -v ON_ERROR_STOP=1
-          psql -h localhost -U postgres -d noharm -f nutricao-database/migrations/flyway/V2__create_demo_schema.sql -v ON_ERROR_STOP=1
-          psql -h localhost -U postgres -d noharm -f nutricao-database/migrations/flyway/V3__create_triggers.sql -v ON_ERROR_STOP=1
-          psql -h localhost -U postgres -d noharm -f nutricao-database/migrations/flyway/V4__seed_data.sql -v ON_ERROR_STOP=1
-          psql -h localhost -U postgres -d noharm -f nutricao-database/migrations/flyway/V5__nitra_test_seed.sql -v ON_ERROR_STOP=1
+          for f in $(ls -v nutricao-database/migrations/flyway/V*.sql); do
+            echo "Applying $f"
+            psql -h localhost -U postgres -d noharm -f "$f" -v ON_ERROR_STOP=1
+          done
 
       - name: Rodar testes com cobertura
         env:
