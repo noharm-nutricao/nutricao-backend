@@ -40,7 +40,7 @@ def _get_or_create_triagem(
         .filter(NutritionalScreening.nratendimento == nratendimento)
         .filter(NutritionalScreening.protocolo == "NRS2002")
         .order_by(
-            NutritionalScreening.calculado_at.desc().nullslast(),
+            NutritionalScreening.calculado_at.desc().nulls_last(),
             NutritionalScreening.id.desc(),
         )
         .first()
