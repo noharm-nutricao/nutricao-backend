@@ -66,11 +66,16 @@ def get_patients(setor=None, ala=None):
         )
         .subquery("last_assessment")
     )
-    # sev
+    # sev - filter by protocol based on segment type (ICU -> MNUTRIC, else NRS2002)
+    _sev_protocolo = case(
+        (Segment.type == SegmentTypeEnum.ICU.value, literal("MNUTRIC")),
+        else_=literal("NRS2002"),
+    )
     sev_subq = (
         db.session.query(NutritionalScreening.classificacao)
         .filter(NutritionalScreening.nratendimento == Patient.admissionNumber)
-        .correlate(Patient)
+        .filter(NutritionalScreening.protocolo == _sev_protocolo)
+        .correlate(Patient, Segment)
         .order_by(NutritionalScreening.id.desc())
         .limit(1)
         .scalar_subquery()
