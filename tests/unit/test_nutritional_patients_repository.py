@@ -4,9 +4,10 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from sqlalchemy import func, literal
+from sqlalchemy.sql.elements import Case
 
 from models.enums import SegmentTypeEnum
-from models.nutritional import NutritionalAssessment
+from models.nutritional import NutritionalAssessment, NutritionalScreening
 from models.prescription import Patient
 from models.segment import Segment
 from repository import nutritional_patients_repository as repo
@@ -67,6 +68,36 @@ def _setup_session(monkeypatch, rows):
     return mocked_session, main_query, last_assessment_query, last_assessment_subquery
 
 
+def _setup_session_with_sev_subq(monkeypatch, rows):
+    """Patch repo.db.session and return the sev subquery builder for inspection."""
+    main_query = _make_main_query(rows)
+    last_assessment_query, last_assessment_subquery = _make_last_assessment_builder()
+    sev_subq_builder = _make_subquery_builder(literal(None))
+
+    mocked_session = MagicMock()
+    mocked_session.query.side_effect = [
+        _make_subquery_builder(func.now()),  # haval_subq
+        _make_subquery_builder(literal(0)),  # d7_subq
+        last_assessment_query,  # last_assessment grouped subquery
+        sev_subq_builder,  # sev_subq
+        _make_subquery_builder(literal(None)),  # glim_diag_subq
+        _make_subquery_builder(literal(None)),  # glim_fen_subq
+        _make_subquery_builder(literal(None)),  # glim_etiol_subq
+        _make_subquery_builder(literal(None)),  # nrs_data_subq
+        _make_subquery_builder(literal(None)),  # mnutric_data_subq
+        main_query,
+    ]
+
+    monkeypatch.setattr(repo.db, "session", mocked_session)
+    return (
+        mocked_session,
+        main_query,
+        last_assessment_query,
+        last_assessment_subquery,
+        sev_subq_builder,
+    )
+
+
 def _get_filter(main_query, index):
     return main_query.filter.call_args_list[index].args[0]
 
@@ -112,6 +143,28 @@ def test_get_patients_builds_last_assessment_subquery(monkeypatch):
         NutritionalAssessment.frequencia,
     )
     last_assessment_query.subquery.assert_called_once_with("last_assessment")
+
+
+def test_get_patients_builds_sev_subq_with_protocol_filter(monkeypatch):
+    _, _, _, _, sev_subq_builder = _setup_session_with_sev_subq(
+        monkeypatch, rows=[]
+    )
+
+    repo.get_patients()
+
+    assert sev_subq_builder.filter.call_count == 2
+
+    protocolo_filter = sev_subq_builder.filter.call_args_list[1].args[0]
+    _assert_same_column(protocolo_filter.left, NutritionalScreening.protocolo)
+    assert isinstance(protocolo_filter.right, Case)
+
+    when_cond, when_result = protocolo_filter.right.whens[0]
+    _assert_same_column(when_cond.left, Segment.type)
+    assert when_cond.right.value == SegmentTypeEnum.ICU.value
+    assert when_result.value == "MNUTRIC"
+    assert protocolo_filter.right.else_.value == "NRS2002"
+
+    assert sev_subq_builder.correlate.call_args.args == (Patient, Segment)
 
 
 def test_get_patients_with_setor_applies_department_filter(monkeypatch):
