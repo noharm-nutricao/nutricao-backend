@@ -29,6 +29,7 @@ def _make_last_assessment_builder():
     grouped = MagicMock()
     grouped.distinct.return_value = grouped
     grouped.group_by.return_value = grouped
+    grouped.order_by.return_value = grouped
 
     subquery = MagicMock()
     grouped.subquery.return_value = subquery
@@ -41,6 +42,7 @@ def _make_main_query(rows):
     main_query.select_from.return_value = main_query
     main_query.outerjoin.return_value = main_query
     main_query.filter.return_value = main_query
+    main_query.order_by.return_value = main_query
     main_query.all.return_value = rows
     return main_query
 
@@ -56,6 +58,8 @@ def _setup_session(monkeypatch, rows):
         _make_subquery_builder(literal(0)),  # d7_subq
         last_assessment_query,  # last_assessment grouped subquery
         _make_subquery_builder(literal(None)),  # sev_subq
+        _make_subquery_builder(literal(None)),  # nrs_total_subq
+        _make_subquery_builder(literal(None)),  # mnutric_total_subq
         _make_subquery_builder(literal(None)),  # glim_diag_subq
         _make_subquery_builder(literal(None)),  # glim_fen_subq
         _make_subquery_builder(literal(None)),  # glim_etiol_subq
@@ -80,6 +84,8 @@ def _setup_session_with_sev_subq(monkeypatch, rows):
         _make_subquery_builder(literal(0)),  # d7_subq
         last_assessment_query,  # last_assessment grouped subquery
         sev_subq_builder,  # sev_subq
+        _make_subquery_builder(literal(None)),  # nrs_total_subq
+        _make_subquery_builder(literal(None)),  # mnutric_total_subq
         _make_subquery_builder(literal(None)),  # glim_diag_subq
         _make_subquery_builder(literal(None)),  # glim_fen_subq
         _make_subquery_builder(literal(None)),  # glim_etiol_subq
@@ -117,10 +123,14 @@ def test_get_patients_without_optional_filters(monkeypatch):
     result = repo.get_patients()
 
     assert result == rows
-    assert mocked_session.query.call_count == 10
+    assert mocked_session.query.call_count == 12
     main_query.select_from.assert_called_once_with(Patient)
     assert main_query.outerjoin.call_count == 4
     assert main_query.filter.call_count == 1
+    main_query.order_by.assert_called_once()
+    order_args = main_query.order_by.call_args.args
+    assert len(order_args) == 7
+    assert isinstance(order_args[0], Case)
     main_query.all.assert_called_once_with()
 
     first_join_target = main_query.outerjoin.call_args_list[0].args[0]
@@ -138,10 +148,7 @@ def test_get_patients_builds_last_assessment_subquery(monkeypatch):
     last_assessment_query.distinct.assert_called_once_with(
         NutritionalAssessment.nratendimento
     )
-    assert last_assessment_query.group_by.call_args.args == (
-        NutritionalAssessment.nratendimento,
-        NutritionalAssessment.frequencia,
-    )
+    assert last_assessment_query.order_by.call_count == 1
     last_assessment_query.subquery.assert_called_once_with("last_assessment")
 
 
