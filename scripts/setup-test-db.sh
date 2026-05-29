@@ -2,30 +2,23 @@
 set -e
 
 DB_URL="postgresql://postgres@localhost/noharm"
-DATABASE_REPO="/tmp/noharm-database"
 COMPOSE="docker compose -f docker-compose.test.yml"
+MIGRATIONS_DIR="$(dirname "$0")/../database/migrations/flyway"
 
 echo "Starting PostgreSQL container..."
 $COMPOSE up -d
 
 echo "Waiting for PostgreSQL to be ready..."
-until $COMPOSE exec db pg_isready -U postgres -d noharm 2>/dev/null; do
+until psql "$DB_URL" -c "SELECT 1" >/dev/null 2>&1; do
   sleep 1
 done
 echo "PostgreSQL is ready."
 
-echo "Cloning noharm-ai/database..."
-if [ -d "$DATABASE_REPO" ]; then
-  git -C "$DATABASE_REPO" pull --quiet
-else
-  git clone --quiet https://github.com/noharm-ai/database "$DATABASE_REPO"
-fi
-
-echo "Loading database..."
-psql "$DB_URL" -f "$DATABASE_REPO/noharm-public.sql"   -v ON_ERROR_STOP=1
-psql "$DB_URL" -f "$DATABASE_REPO/noharm-create.sql"   -v ON_ERROR_STOP=1
-psql "$DB_URL" -f "$DATABASE_REPO/noharm-newuser.sql"  -v ON_ERROR_STOP=1
-psql "$DB_URL" -f "$DATABASE_REPO/noharm-triggers.sql" -v ON_ERROR_STOP=1
-psql "$DB_URL" -f "$DATABASE_REPO/noharm-insert.sql"   -v ON_ERROR_STOP=1
+echo "Loading database migrations..."
+for sql_file in "$MIGRATIONS_DIR"/V*__*.sql "$MIGRATIONS_DIR"/R__*.sql; do
+  [ -f "$sql_file" ] || continue
+  echo "  Applying $(basename "$sql_file")..."
+  psql "$DB_URL" -f "$sql_file" -v ON_ERROR_STOP=1
+done
 
 echo "Done. Run: make test"
