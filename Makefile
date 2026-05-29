@@ -39,7 +39,9 @@ test-ci-setup:
 
 ## Run nutritional tests with CI database (run make test-ci-setup first)
 test-ci:
-	ENV=test python -m pytest tests/unit/test_nutritional*.py tests/integration/test_nutritional*.py --cov=. --cov-report=xml:coverage.xml -v
+	DB_HOST=localhost DB_PORT=5432 DB_NAME=noharm DB_USER=postgres DB_PASSWORD="" ENV=test \
+	python -m pytest tests/unit/test_nutritional*.py tests/integration/test_nutritional*.py \
+	--cov=. --cov-report=xml:coverage.xml -v
 
 ## Run nutritional tests against nitra_db (docker-compose.nitra.yml must be up)
 test-nitra:

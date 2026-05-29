@@ -274,7 +274,7 @@ def test_recalculate_mnutric_restores_dimension_scores_and_normalizes_patient():
         lastTransferDate=FIXED_NOW - timedelta(days=1),
         idcid="A00",
     )
-    screening = SimpleNamespace(mn_apache=2, mn_sofa=1)
+    screening = SimpleNamespace(mn_apache=2, mn_sofa=1, mn_apache_manual=True, mn_sofa_manual=True)
 
     with patch(
         "services.nutritional.nutritional_patient_service.nutritional_repository.get_saved_mnutric",
@@ -350,6 +350,6 @@ def test_recalculate_mnutric_returns_dados_incompletos_when_screening_is_missing
 
     assert result["dados_incompletos"] is True
     assert result["classify"] is None
-    assert result["apache"] == 0
-    assert result["sofa"] == 0
+    assert result["apache"] is None
+    assert result["sofa"] is None
     update_scores.assert_called_once_with(123, result)
