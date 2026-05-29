@@ -127,4 +127,6 @@ class NutritionalAlert(db.Model):
     reconhecido = db.Column("reconhecido", db.Boolean, default=False)
     reconhecido_por = db.Column("reconhecido_por", db.Integer, db.ForeignKey("public.usuario.idusuario"), nullable=True)
     reconhecido_at = db.Column("reconhecido_at", db.DateTime, nullable=True)
+    fk_origem_gatilho_evol = db.Column("fk_origem_gatilho_evol", db.BigInteger, nullable=True)
+    fk_origem_gatilho_pres = db.Column("fk_origem_gatilho_pres", db.BigInteger, nullable=True)
     created_at = db.Column("created_at", db.DateTime, nullable=True)
