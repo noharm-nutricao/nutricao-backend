@@ -4,9 +4,10 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from sqlalchemy import func, literal
+from sqlalchemy.sql.elements import Case
 
 from models.enums import SegmentTypeEnum
-from models.nutritional import NutritionalAssessment
+from models.nutritional import NutritionalAssessment, NutritionalScreening
 from models.prescription import Patient
 from models.segment import Segment
 from repository import nutritional_patients_repository as repo
@@ -28,6 +29,7 @@ def _make_last_assessment_builder():
     grouped = MagicMock()
     grouped.distinct.return_value = grouped
     grouped.group_by.return_value = grouped
+    grouped.order_by.return_value = grouped
 
     subquery = MagicMock()
     grouped.subquery.return_value = subquery
@@ -40,6 +42,7 @@ def _make_main_query(rows):
     main_query.select_from.return_value = main_query
     main_query.outerjoin.return_value = main_query
     main_query.filter.return_value = main_query
+    main_query.order_by.return_value = main_query
     main_query.all.return_value = rows
     return main_query
 
@@ -55,6 +58,8 @@ def _setup_session(monkeypatch, rows):
         _make_subquery_builder(literal(0)),  # d7_subq
         last_assessment_query,  # last_assessment grouped subquery
         _make_subquery_builder(literal(None)),  # sev_subq
+        _make_subquery_builder(literal(None)),  # nrs_total_subq
+        _make_subquery_builder(literal(None)),  # mnutric_total_subq
         _make_subquery_builder(literal(None)),  # glim_diag_subq
         _make_subquery_builder(literal(None)),  # glim_fen_subq
         _make_subquery_builder(literal(None)),  # glim_etiol_subq
@@ -65,6 +70,38 @@ def _setup_session(monkeypatch, rows):
 
     monkeypatch.setattr(repo.db, "session", mocked_session)
     return mocked_session, main_query, last_assessment_query, last_assessment_subquery
+
+
+def _setup_session_with_sev_subq(monkeypatch, rows):
+    """Patch repo.db.session and return the sev subquery builder for inspection."""
+    main_query = _make_main_query(rows)
+    last_assessment_query, last_assessment_subquery = _make_last_assessment_builder()
+    sev_subq_builder = _make_subquery_builder(literal(None))
+
+    mocked_session = MagicMock()
+    mocked_session.query.side_effect = [
+        _make_subquery_builder(func.now()),  # haval_subq
+        _make_subquery_builder(literal(0)),  # d7_subq
+        last_assessment_query,  # last_assessment grouped subquery
+        sev_subq_builder,  # sev_subq
+        _make_subquery_builder(literal(None)),  # nrs_total_subq
+        _make_subquery_builder(literal(None)),  # mnutric_total_subq
+        _make_subquery_builder(literal(None)),  # glim_diag_subq
+        _make_subquery_builder(literal(None)),  # glim_fen_subq
+        _make_subquery_builder(literal(None)),  # glim_etiol_subq
+        _make_subquery_builder(literal(None)),  # nrs_data_subq
+        _make_subquery_builder(literal(None)),  # mnutric_data_subq
+        main_query,
+    ]
+
+    monkeypatch.setattr(repo.db, "session", mocked_session)
+    return (
+        mocked_session,
+        main_query,
+        last_assessment_query,
+        last_assessment_subquery,
+        sev_subq_builder,
+    )
 
 
 def _get_filter(main_query, index):
@@ -86,10 +123,14 @@ def test_get_patients_without_optional_filters(monkeypatch):
     result = repo.get_patients()
 
     assert result == rows
-    assert mocked_session.query.call_count == 10
+    assert mocked_session.query.call_count == 12
     main_query.select_from.assert_called_once_with(Patient)
     assert main_query.outerjoin.call_count == 4
     assert main_query.filter.call_count == 1
+    main_query.order_by.assert_called_once()
+    order_args = main_query.order_by.call_args.args
+    assert len(order_args) == 7
+    assert isinstance(order_args[0], Case)
     main_query.all.assert_called_once_with()
 
     first_join_target = main_query.outerjoin.call_args_list[0].args[0]
@@ -107,11 +148,30 @@ def test_get_patients_builds_last_assessment_subquery(monkeypatch):
     last_assessment_query.distinct.assert_called_once_with(
         NutritionalAssessment.nratendimento
     )
-    assert last_assessment_query.group_by.call_args.args == (
-        NutritionalAssessment.nratendimento,
-        NutritionalAssessment.frequencia,
-    )
+    assert last_assessment_query.order_by.call_count == 1
     last_assessment_query.subquery.assert_called_once_with("last_assessment")
+
+
+def test_get_patients_builds_sev_subq_with_protocol_filter(monkeypatch):
+    _, _, _, _, sev_subq_builder = _setup_session_with_sev_subq(
+        monkeypatch, rows=[]
+    )
+
+    repo.get_patients()
+
+    assert sev_subq_builder.filter.call_count == 2
+
+    protocolo_filter = sev_subq_builder.filter.call_args_list[1].args[0]
+    _assert_same_column(protocolo_filter.left, NutritionalScreening.protocolo)
+    assert isinstance(protocolo_filter.right, Case)
+
+    when_cond, when_result = protocolo_filter.right.whens[0]
+    _assert_same_column(when_cond.left, Segment.type)
+    assert when_cond.right.value == SegmentTypeEnum.ICU.value
+    assert when_result.value == "MNUTRIC"
+    assert protocolo_filter.right.else_.value == "NRS2002"
+
+    assert sev_subq_builder.correlate.call_args.args == (Patient, Segment)
 
 
 def test_get_patients_with_setor_applies_department_filter(monkeypatch):

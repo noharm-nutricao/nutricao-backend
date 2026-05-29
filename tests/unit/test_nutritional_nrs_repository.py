@@ -92,12 +92,16 @@ def test_get_or_create_triagem_internal_returns_existing_without_persist() -> No
     session = MagicMock()
     query = session.query.return_value
     filtered = query.filter.return_value
+    filtered_protocol = filtered.filter.return_value
+    ordered = filtered_protocol.order_by.return_value
     existing = SimpleNamespace(id=10)
-    filtered.first.return_value = existing
+    ordered.first.return_value = existing
 
     result = repo._get_or_create_triagem(session, 77)
 
     assert result is existing
+    filtered_protocol.order_by.assert_called_once()
+    assert len(filtered_protocol.order_by.call_args[0]) == 2
     session.add.assert_not_called()
     session.flush.assert_not_called()
 
@@ -106,7 +110,9 @@ def test_get_or_create_triagem_internal_creates_with_defaults() -> None:
     session = MagicMock()
     query = session.query.return_value
     filtered = query.filter.return_value
-    filtered.first.return_value = None
+    filtered_protocol = filtered.filter.return_value
+    ordered = filtered_protocol.order_by.return_value
+    ordered.first.return_value = None
 
     result = repo._get_or_create_triagem(session, 42)
 
@@ -116,6 +122,9 @@ def test_get_or_create_triagem_internal_creates_with_defaults() -> None:
     assert result.nrs_completo is False
     assert result.nrs_total is None
     assert result.classificacao is None
+    assert result.mn_apache_manual is False
+    assert result.mn_sofa_manual is False
+    filtered_protocol.order_by.assert_called_once()
     session.add.assert_called_once_with(result)
     session.flush.assert_called_once_with()
 
