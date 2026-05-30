@@ -345,3 +345,73 @@ def test_build_campo1_incomplete_mnutric_includes_nrs_when_available():
         },
     }
 
+
+def test_build_campo1_nrs_total_zero_is_valid():
+    # nrs_total=0 is a legitimate score and must not be dropped
+    row = SimpleNamespace(
+        nrs_data={"nrs_total": 0, "nrs_nut": 0, "nrs_doenca": 0, "nrs_idade": 0},
+        mnutric_data=None,
+    )
+
+    assert service._build_campo1("NRS2002", row) == {
+        "nrs_total": 0,
+        "nrs_dims": {"nut": 0, "doenca": 0, "idade": 0},
+    }
+
+
+def test_build_campo1_mnutric_without_nrs():
+    # MNUTRIC patient with no NRS screening done yet
+    row = SimpleNamespace(
+        nrs_data=None,
+        mnutric_data={
+            "mn_total": 5,
+            "mn_idade": 1,
+            "mn_apache": 2,
+            "mn_sofa": 1,
+            "mn_comor": 1,
+            "mn_dias": 0,
+            "mn_apache_manual": True,
+            "mn_sofa_manual": True,
+        },
+    )
+
+    assert service._build_campo1("MNUTRIC", row) == {
+        "mnutric_total": 5,
+        "mn_dims": {"idade": 1, "apache": 2, "sofa": 1, "comor": 1, "dias": 0},
+    }
+
+
+def test_build_campo1_incomplete_mnutric_without_nrs():
+    # Incomplete MNUTRIC (missing manual scores) with no NRS available
+    row = SimpleNamespace(
+        nrs_data=None,
+        mnutric_data={
+            "mn_total": 3,
+            "mn_idade": 1,
+            "mn_apache": 1,
+            "mn_sofa": 1,
+            "mn_comor": 0,
+            "mn_dias": 1,
+            "mn_apache_manual": False,
+            "mn_sofa_manual": False,
+        },
+    )
+
+    assert service._build_campo1("MNUTRIC", row) == {
+        "dados_incompletos": True,
+        "mn_dims": {"idade": 1, "apache": None, "sofa": None, "comor": 0, "dias": 1},
+    }
+
+
+def test_build_campo1_mnutric_only_nrs_no_mn_data():
+    # ICU patient with NRS done but MNUTRIC not yet started
+    row = SimpleNamespace(
+        nrs_data={"nrs_total": 3, "nrs_nut": 1, "nrs_doenca": 1, "nrs_idade": 1},
+        mnutric_data=None,
+    )
+
+    assert service._build_campo1("MNUTRIC", row) == {
+        "nrs_total": 3,
+        "nrs_dims": {"nut": 1, "doenca": 1, "idade": 1},
+    }
+
