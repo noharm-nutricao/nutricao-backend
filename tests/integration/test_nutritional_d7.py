@@ -72,10 +72,12 @@ def _seed():
 
 def _cleanup():
     session.execute(
-        text("DELETE FROM demo.nutricional_d7 WHERE nratendimento >= 900000")
+        text("DELETE FROM demo.nutricional_d7 WHERE nratendimento = :adm"),
+        {"adm": _ADM},
     )
     session.execute(
-        text("DELETE FROM demo.pessoa WHERE nratendimento >= 900000")
+        text("DELETE FROM demo.pessoa WHERE nratendimento = :adm"),
+        {"adm": _ADM},
     )
     session_commit()
 

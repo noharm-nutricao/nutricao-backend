@@ -1,8 +1,13 @@
 name: build-validation.yml
 
 on:
+  push:
+    branches: [develop]
   pull_request:
     branches: [develop]
+
+permissions:
+  contents: read
 
 jobs:
   docker-build-and-test:
@@ -14,7 +19,7 @@ jobs:
 
       - name: Clonar repo do database
         run: |
-          git clone https://github.com/noharm-nutricao/nutricao-database.git database
+          git clone --branch develop https://github.com/noharm-nutricao/nutricao-database.git database
 
       - name: Build containers
         run: docker compose -f docker-compose.ci.yml build
@@ -42,10 +47,88 @@ jobs:
           docker compose -f docker-compose.ci.yml logs
           exit 1
 
+      - name: Logs em caso de falha
+        if: failure()
+        run: docker compose -f docker-compose.ci.yml logs
+
       - name: Derrubar
         if: always()
         run: docker compose -f docker-compose.ci.yml down -v
 
-      - name: Logs em caso de falha
-        if: failure()
-        run: docker compose -f docker-compose.ci.yml logs
+  sonar:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: noharm
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Setup PostgreSQL
+        run: |
+          git clone --branch develop https://github.com/noharm-nutricao/nutricao-database
+          for f in $(ls -v nutricao-database/migrations/flyway/V*.sql); do
+            echo "Applying $f"
+            psql -h localhost -U postgres -d noharm -f "$f" -v ON_ERROR_STOP=1
+          done
+
+      - name: Rodar testes com cobertura
+        env:
+          ENV: test
+          DB_HOST: localhost
+          DB_PORT: "5432"
+          DB_NAME: noharm
+          DB_USER: postgres
+          DB_PASSWORD: ""
+        run: |
+          python -m pytest tests/unit/test_nutritional*.py tests/integration/test_nutritional*.py --cov=. --cov-report=xml:coverage.xml
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@ba3875ecf642b2129de2b589510c81a8b53dbf4e  # master 2026-05-22
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      - name: Comentar resultado no PR
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        with:
+          script: |
+            const fs = require('fs');
+            const reportPath = '.scannerwork/report-task.txt';
+            if (fs.existsSync(reportPath)) {
+              const content = fs.readFileSync(reportPath, 'utf8');
+              const match = content.match(/projectKey=(.*?)(?:\n|$)/);
+              const projectKey = match ? match[1] : 'unknown';
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `## SonarCloud Quality Gate Report\n\n✅ Analysis completed. Check [SonarCloud Dashboard](https://sonarcloud.io/project/overview?id=${projectKey}) for details.\n\nQuality Gate must pass for merge:\n- New Code Coverage: >= 80%\n- New Code Duplication: <= 3%\n- Maintainability Rating: A\n- Reliability Rating: A\n- Security Rating: A\n- Security Hotspots Reviewed: 100%`
+              });
+            }
