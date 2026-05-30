@@ -159,11 +159,13 @@ def _build_campo1(protocolo, row):
     Returns None if no score has been calculated yet for this admission.
     For MNUTRIC patients, NRS scores are included when available.
     """
+    if not row:
+        return None
     nrs = row.nrs_data or {}
     mn = row.mnutric_data or {}
     nrs_dict: Optional[dict] = None
-    if nrs and nrs.get("nrs_total"):
-        nrs_dict =  {
+    if nrs and nrs.get("nrs_total") is not None:
+        nrs_dict = {
             "nrs_total": nrs["nrs_total"],
             "nrs_dims": {
                 "nut": nrs.get("nrs_nut") or 0,
@@ -177,6 +179,8 @@ def _build_campo1(protocolo, row):
     if protocolo == "MNUTRIC":
         if not mn and not nrs_dict:
             return None
+        if not mn and nrs_dict:
+            return nrs_dict
 
         apache_manual = mn.get("mn_apache_manual") or False
         sofa_manual = mn.get("mn_sofa_manual") or False
