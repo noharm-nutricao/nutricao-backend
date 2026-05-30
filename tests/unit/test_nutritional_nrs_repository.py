@@ -136,6 +136,7 @@ def test_update_triagem_internal_updates_fields_and_flushes() -> None:
         nrs_doenca=None,
         nrs_idade=None,
         nrs_total=None,
+        classificacao=None,
         nrs_completo=False,
         nrs_ref_at=None,
         calculado_at=None,
@@ -147,6 +148,7 @@ def test_update_triagem_internal_updates_fields_and_flushes() -> None:
         nrs_doenca=1,
         nrs_idade=1,
         nrs_total=4,
+        classificacao="al",
         nrs_completo=True,
         nrs_ref_at=now,
         calculado_at=now,
@@ -159,6 +161,7 @@ def test_update_triagem_internal_updates_fields_and_flushes() -> None:
     assert triagem.nrs_doenca == 1
     assert triagem.nrs_idade == 1
     assert triagem.nrs_total == 4
+    assert triagem.classificacao == "al"
     assert triagem.nrs_completo is True
     assert triagem.nrs_ref_at == now
     assert triagem.calculado_at == now

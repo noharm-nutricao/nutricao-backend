@@ -85,6 +85,7 @@ def _update_triagem(
     triagem.nrs_doenca = nrs_score.nrs_doenca
     triagem.nrs_idade = nrs_score.nrs_idade
     triagem.nrs_total = nrs_score.nrs_total
+    triagem.classificacao = nrs_score.classificacao
     triagem.nrs_completo = nrs_score.nrs_completo
     triagem.nrs_ref_at = nrs_score.nrs_ref_at
     triagem.calculado_at = nrs_score.calculado_at
