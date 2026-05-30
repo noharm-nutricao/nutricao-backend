@@ -243,3 +243,105 @@ def test_get_patients_maps_nrs_row_defaults_and_unknown_frequency(monkeypatch):
         },
     }
 
+
+def test_build_campo1_returns_nrs_for_nrs_protocol():
+    row = SimpleNamespace(
+        nrs_data={
+            "nrs_total": 3,
+            "nrs_nut": 1,
+            "nrs_doenca": 1,
+            "nrs_idade": 1,
+        },
+        mnutric_data=None,
+    )
+
+    assert service._build_campo1("NRS2002", row) == {
+        "nrs_total": 3,
+        "nrs_dims": {
+            "nut": 1,
+            "doenca": 1,
+            "idade": 1,
+        },
+    }
+
+
+def test_build_campo1_returns_none_when_no_nrs_for_nrs_protocol():
+    row = SimpleNamespace(nrs_data=None, mnutric_data=None)
+    assert service._build_campo1("NRS2002", row) is None
+
+
+def test_build_campo1_includes_nrs_for_mnutric_protocol():
+    row = SimpleNamespace(
+        nrs_data={
+            "nrs_total": 2,
+            "nrs_nut": 1,
+            "nrs_doenca": 0,
+            "nrs_idade": 1,
+        },
+        mnutric_data={
+            "mn_total": 6,
+            "mn_idade": 2,
+            "mn_apache": 1,
+            "mn_sofa": 1,
+            "mn_comor": 1,
+            "mn_dias": 1,
+            "mn_apache_manual": True,
+            "mn_sofa_manual": True,
+        },
+    )
+
+    assert service._build_campo1("MNUTRIC", row) == {
+        "mnutric_total": 6,
+        "mn_dims": {
+            "idade": 2,
+            "apache": 1,
+            "sofa": 1,
+            "comor": 1,
+            "dias": 1,
+        },
+        "nrs_total": 2,
+        "nrs_dims": {
+            "nut": 1,
+            "doenca": 0,
+            "idade": 1,
+        },
+    }
+
+
+def test_build_campo1_incomplete_mnutric_includes_nrs_when_available():
+    row = SimpleNamespace(
+        nrs_data={
+            "nrs_total": 4,
+            "nrs_nut": 2,
+            "nrs_doenca": 1,
+            "nrs_idade": 1,
+        },
+        mnutric_data={
+            "mn_total": 4,
+            "mn_idade": 1,
+            "mn_apache": 2,
+            "mn_sofa": 1,
+            "mn_comor": 0,
+            "mn_dias": 2,
+            "mn_apache_manual": False,
+            "mn_sofa_manual": True,
+        },
+    )
+
+    assert service._build_campo1("MNUTRIC", row) == {
+        "dados_incompletos": True,
+        "mn_dims": {
+            "idade": 1,
+            "apache": None,
+            "sofa": None,
+            "comor": 0,
+            "dias": 2,
+        },
+        "nrs_total": 4,
+        "nrs_dims": {
+            "nut": 2,
+            "doenca": 1,
+            "idade": 1,
+        },
+    }
+
