@@ -330,4 +330,3 @@ def test_get_glim_returns_404_when_no_diagnosis(client, analyst_headers):
     assert response.status_code == 404
     body = response.get_json()
     assert body["code"] == "errors.notFound"
-
