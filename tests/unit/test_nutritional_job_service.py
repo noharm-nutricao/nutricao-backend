@@ -97,6 +97,9 @@ class TestRecalculateNutritionalScores:
         assert mock_error.call_count == 1
 
     def test_logs_error_for_icu_patient_when_recalculation_returns_none(self):
+        """mNUTRIC returning None is logged as an error, but NRS-2002 must still
+        run and be committed for the ICU patient (the two scores are independent).
+        """
         patients = [_make_patient(10, True)]
 
         with patch(
@@ -118,7 +121,7 @@ class TestRecalculateNutritionalScores:
         ) as mock_commit, patch.object(job_service.logger, "error") as mock_error:
             job_service.recalculate_nutritional_scores(flask_app)
 
-        mock_commit.assert_not_called()
+        mock_commit.assert_called_once()
         assert any("retorno None" in str(call) for call in mock_error.call_args_list)
 
     def test_logs_summary_after_run(self):
