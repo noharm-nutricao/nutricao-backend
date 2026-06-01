@@ -25,15 +25,15 @@ def _make_subquery_builder(scalar_result):
 
 
 def _make_last_assessment_builder():
-    """Create a fluent mock for last_assessment subquery chain."""
+    """Create a fluent mock for last_assessment grouped subquery."""
+    grouped = MagicMock()
+    grouped.distinct.return_value = grouped
+    grouped.group_by.return_value = grouped
+    grouped.order_by.return_value = grouped
+
     subquery = MagicMock()
-    ordered = MagicMock()
-    ordered.subquery.return_value = subquery
-    distincted = MagicMock()
-    distincted.order_by.return_value = ordered
-    query = MagicMock()
-    query.distinct.return_value = distincted
-    return query, subquery, distincted, ordered
+    grouped.subquery.return_value = subquery
+    return grouped, subquery
 
 
 def _make_main_query(rows):
@@ -50,15 +50,13 @@ def _make_main_query(rows):
 def _setup_session(monkeypatch, rows):
     """Patch repo.db.session with mocked query builders."""
     main_query = _make_main_query(rows)
-    last_assessment_query, last_assessment_subquery, distincted, ordered = (
-        _make_last_assessment_builder()
-    )
+    last_assessment_query, last_assessment_subquery = _make_last_assessment_builder()
 
     mocked_session = MagicMock()
     mocked_session.query.side_effect = [
         _make_subquery_builder(func.now()),  # haval_subq
         _make_subquery_builder(literal(0)),  # d7_subq
-        last_assessment_query,  # last_assessment subquery
+        last_assessment_query,  # last_assessment grouped subquery
         _make_subquery_builder(literal(None)),  # sev_subq
         _make_subquery_builder(literal(None)),  # nrs_total_subq
         _make_subquery_builder(literal(None)),  # mnutric_total_subq
@@ -71,14 +69,7 @@ def _setup_session(monkeypatch, rows):
     ]
 
     monkeypatch.setattr(repo.db, "session", mocked_session)
-    return (
-        mocked_session,
-        main_query,
-        last_assessment_query,
-        last_assessment_subquery,
-        distincted,
-        ordered,
-    )
+    return mocked_session, main_query, last_assessment_query, last_assessment_subquery
 
 
 def _setup_session_with_sev_subq(monkeypatch, rows):
@@ -125,7 +116,7 @@ def _assert_same_column(expression_column, model_attr):
 
 def test_get_patients_without_optional_filters(monkeypatch):
     rows = [SimpleNamespace(id=1)]
-    mocked_session, main_query, _, last_assessment_subquery, _, _ = _setup_session(
+    mocked_session, main_query, _, last_assessment_subquery = _setup_session(
         monkeypatch, rows
     )
 
@@ -150,16 +141,15 @@ def test_get_patients_without_optional_filters(monkeypatch):
 
 
 def test_get_patients_builds_last_assessment_subquery(monkeypatch):
-    _, _, _, _, distincted, ordered = _setup_session(monkeypatch, rows=[])
+    _, _, last_assessment_query, _ = _setup_session(monkeypatch, rows=[])
 
     repo.get_patients()
 
-    distincted.order_by.assert_called_once()
-    order_args = distincted.order_by.call_args[0]
-    assert order_args[0] is NutritionalAssessment.nratendimento
-    _assert_same_column(order_args[1].element, NutritionalAssessment.created_at)
-    _assert_same_column(order_args[2].element, NutritionalAssessment.id)
-    ordered.subquery.assert_called_once_with("last_assessment")
+    last_assessment_query.distinct.assert_called_once_with(
+        NutritionalAssessment.nratendimento
+    )
+    assert last_assessment_query.order_by.call_count == 1
+    last_assessment_query.subquery.assert_called_once_with("last_assessment")
 
 
 def test_get_patients_builds_sev_subq_with_protocol_filter(monkeypatch):
@@ -185,7 +175,7 @@ def test_get_patients_builds_sev_subq_with_protocol_filter(monkeypatch):
 
 
 def test_get_patients_with_setor_applies_department_filter(monkeypatch):
-    _, main_query, _, _, _, _ = _setup_session(monkeypatch, rows=[])
+    _, main_query, _, _ = _setup_session(monkeypatch, rows=[])
 
     repo.get_patients(setor=123)
 
@@ -196,7 +186,7 @@ def test_get_patients_with_setor_applies_department_filter(monkeypatch):
 
 
 def test_get_patients_with_ala_uti_is_case_insensitive(monkeypatch):
-    _, main_query, _, _, _, _ = _setup_session(monkeypatch, rows=[])
+    _, main_query, _, _ = _setup_session(monkeypatch, rows=[])
 
     repo.get_patients(ala="uti")
 
@@ -207,7 +197,7 @@ def test_get_patients_with_ala_uti_is_case_insensitive(monkeypatch):
 
 
 def test_get_patients_with_ala_enfermaria_uses_not_icu_or_null(monkeypatch):
-    _, main_query, _, _, _, _ = _setup_session(monkeypatch, rows=[])
+    _, main_query, _, _ = _setup_session(monkeypatch, rows=[])
 
     repo.get_patients(ala="Enfermaria")
 
@@ -224,7 +214,7 @@ def test_get_patients_with_ala_enfermaria_uses_not_icu_or_null(monkeypatch):
 
 
 def test_get_patients_with_unknown_ala_filters_only_null_segment(monkeypatch):
-    _, main_query, _, _, _, _ = _setup_session(monkeypatch, rows=[])
+    _, main_query, _, _ = _setup_session(monkeypatch, rows=[])
 
     repo.get_patients(ala="CLINICA")
 
@@ -235,7 +225,7 @@ def test_get_patients_with_unknown_ala_filters_only_null_segment(monkeypatch):
 
 
 def test_get_patients_with_setor_and_ala_applies_both_filters(monkeypatch):
-    _, main_query, _, _, _, _ = _setup_session(monkeypatch, rows=[])
+    _, main_query, _, _ = _setup_session(monkeypatch, rows=[])
 
     repo.get_patients(setor=77, ala="UTI")
 
