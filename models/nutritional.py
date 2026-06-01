@@ -1,7 +1,7 @@
 
 from .main import db
 
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.dialects import postgresql
 
 from app.extensions import db
@@ -128,3 +128,42 @@ class NutritionalAlert(db.Model):
     reconhecido_por = db.Column("reconhecido_por", db.Integer, db.ForeignKey("public.usuario.idusuario"), nullable=True)
     reconhecido_at = db.Column("reconhecido_at", db.DateTime, nullable=True)
     created_at = db.Column("created_at", db.DateTime, nullable=True)
+
+
+class NutritionalLlmSummary(db.Model):
+    __tablename__ = "nutricional_llm_resumo"
+
+    id = db.Column("id", db.BigInteger, primary_key=True, autoincrement=True)
+    context_hash = db.Column("context_hash", db.CHAR(64), nullable=False)
+    nratendimento = db.Column("nratendimento", db.BigInteger, nullable=False)
+    report_type = db.Column("report_type", db.String(40), nullable=False)
+    max_assessments = db.Column("max_assessments", db.SmallInteger, nullable=False)
+    status = db.Column(
+        "status", db.String(16), nullable=False, server_default="pending"
+    )  # pending | processing | done | failed
+    prompt_version = db.Column("prompt_version", db.String(60), nullable=False)
+    model = db.Column("model", db.String(60), nullable=True)
+    summary = db.Column("summary", postgresql.TEXT, nullable=True)
+    tokens_used = db.Column("tokens_used", db.Integer, nullable=True)
+    error_code = db.Column("error_code", db.String(40), nullable=True)
+    error_message = db.Column("error_message", postgresql.TEXT, nullable=True)
+    attempts = db.Column(
+        "attempts", db.SmallInteger, nullable=False, server_default="0"
+    )
+    lease_until = db.Column("lease_until", db.DateTime, nullable=True)
+    created_at = db.Column(
+        "created_at", db.DateTime, nullable=False, server_default=func.now()
+    )
+    processed_at = db.Column("processed_at", db.DateTime, nullable=True)
+    expires_at = db.Column("expires_at", db.DateTime, nullable=True)
+
+    __table_args__ = (
+        db.UniqueConstraint("context_hash", name="uq_llm_resumo_hash"),
+        # claim eficiente do worker (DB-as-queue): só linhas "trabalháveis"
+        db.Index(
+            "ix_llm_resumo_claim",
+            "created_at",
+            postgresql_where=text("status IN ('pending', 'processing')"),
+        ),
+        db.Index("ix_llm_resumo_atend", "nratendimento"),
+    )
