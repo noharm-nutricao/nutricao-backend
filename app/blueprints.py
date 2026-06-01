@@ -139,7 +139,9 @@ def register_blueprints(app):
     # Nutritional blueprints
     from routes.nutritional.nutritional_job import app_nutritional_job
     from  routes.nutritional.healthz import app_nutritional_health
+    from routes.nutritional.nutritional_llm import app_nutritional_llm
 
     app.register_blueprint(app_nutritional_health)
     app.register_blueprint(app_nutritional)
     app.register_blueprint(app_nutritional_job)
+    app.register_blueprint(app_nutritional_llm)
