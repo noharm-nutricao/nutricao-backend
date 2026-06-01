@@ -1,15 +1,12 @@
 """Single-query retrieval of the LLM clinical context for one admission.
-
 Issue #88, Step 1. Returns, for a given ``nratendimento``, the patient's
 clinical context with **no PII**: scalar patient fields plus four collections
 (screenings, glim, assessments, alerts), each built in the database as a JSON
 array via ``json_agg(json_build_object(...))``.
-
 The column whitelist of each table lives inside its ``json_build_object`` — that
 is where we decide which columns survive (see the plan's field policy). ``id``,
 user foreign keys and bookkeeping dates (``updated_at``/``created_at``) are
 simply not selected. ``birthdate`` is never selected: age is derived in SQL.
-
 Each child subquery is filtered by the literal ``admission_number`` rather than
 correlated to ``Patient``. They are therefore self-contained scalar subqueries,
 which keeps the limited collections (assessments/alerts) free of LATERAL.
@@ -27,16 +24,11 @@ from models.nutritional import (
 )
 from models.prescription import Patient
 
-MAX_ALERTS = 3
-
-
-def get_clinical_context(admission_number: int, max_assessments: int):
+def get_clinical_context(admission_number: int, max_assessments: int, max_alerts: int = 3):
     """Return one row with the PII-free clinical context, or ``None``.
-
     Args:
         admission_number: the ``nratendimento`` (passed by the client).
         max_assessments: LIMIT applied to the assessments collection.
-
     Returns:
         A SQLAlchemy ``Row`` whose columns are the scalar patient fields plus
         ``screenings``, ``glim``, ``assessments`` and ``alerts`` (each already a
@@ -166,7 +158,7 @@ def get_clinical_context(admission_number: int, max_assessments: int):
             NutritionalAlert.created_at.desc(),
             NutritionalAlert.id.desc(),
         )
-        .limit(MAX_ALERTS)
+        .limit(max_alerts)
         .subquery("alerts_inner")
     )
     alerts = (
