@@ -73,15 +73,42 @@ def get_patients(setor=None, ala=None):
         )
         .subquery("last_assessment")
     )
-    # sev
+    # sev - filter by protocol based on segment type (ICU -> MNUTRIC, else NRS2002)
+    _sev_protocolo = case(
+        (Segment.type == SegmentTypeEnum.ICU.value, literal("MNUTRIC")),
+        else_=literal("NRS2002"),
+    )
     sev_subq = (
         db.session.query(NutritionalScreening.classificacao)
         .filter(NutritionalScreening.nratendimento == Patient.admissionNumber)
-        .correlate(Patient)
+        .filter(NutritionalScreening.protocolo == _sev_protocolo)
+        .correlate(Patient, Segment)
         .order_by(NutritionalScreening.id.desc())
         .limit(1)
         .scalar_subquery()
     ).label("sev")
+
+    # score total (NRS-2002)
+    nrs_total_subq = (
+        db.session.query(NutritionalScreening.nrs_total)
+        .filter(NutritionalScreening.nratendimento == Patient.admissionNumber)
+        .filter(NutritionalScreening.protocolo == "NRS2002")
+        .correlate(Patient)
+        .order_by(NutritionalScreening.id.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
+
+    # score total (mNUTRIC)
+    mnutric_total_subq = (
+        db.session.query(NutritionalScreening.mn_total)
+        .filter(NutritionalScreening.nratendimento == Patient.admissionNumber)
+        .filter(NutritionalScreening.protocolo == "MNUTRIC")
+        .correlate(Patient)
+        .order_by(NutritionalScreening.id.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
 
     # GLIM
     glim_diag_subq = (
@@ -196,6 +223,27 @@ def get_patients(setor=None, ala=None):
         .filter(Patient.dischargeDate.is_(None))
     )
 
+    sev_order = case(
+        (sev_subq == literal("cr"), 1),
+        (sev_subq == literal("al"), 2),
+        (sev_subq == literal("md"), 3),
+        (sev_subq == literal("bx"), 4),
+        else_=5,
+    )
+
+    score_expr = case(
+        (
+            Segment.type == SegmentTypeEnum.ICU.value,
+            func.coalesce(mnutric_total_subq, nrs_total_subq),
+        ),
+        else_=nrs_total_subq,
+    )
+
+    is_icu_expr = case(
+        (Segment.type == SegmentTypeEnum.ICU.value, 1),
+        else_=0,
+    )
+
     # filtros
     if setor is not None:
         query = query.filter(Patient.idDepartment == setor)
@@ -216,4 +264,14 @@ def get_patients(setor=None, ala=None):
 
         else:
             query = query.filter(Segment.type.is_(None))
+
+    query = query.order_by(
+        sev_order,
+        score_expr.desc().nulls_last(),
+        d7_expr.desc(),
+        haval_expr.desc().nulls_last(),
+        is_icu_expr.desc(),
+        Patient.admissionDate.asc().nulls_last(),
+        Patient.admissionNumber.asc(),
+    )
     return query.all()

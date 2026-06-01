@@ -38,6 +38,11 @@ def _get_or_create_triagem(
     triagem: Optional[NutritionalScreening] = (
         session.query(NutritionalScreening)
         .filter(NutritionalScreening.nratendimento == nratendimento)
+        .filter(NutritionalScreening.protocolo == "NRS2002")
+        .order_by(
+            NutritionalScreening.calculado_at.desc().nulls_last(),
+            NutritionalScreening.id.desc(),
+        )
         .first()
     )
     if triagem:
@@ -58,8 +63,8 @@ def _get_or_create_triagem(
         mn_comor=None,
         mn_dias=None,
         mn_total=None,
-        mn_apache_manual=None,
-        mn_sofa_manual=None,
+        mn_apache_manual=False,
+        mn_sofa_manual=False,
         classificacao=None,
         calculado_at=None,
     )
@@ -80,6 +85,7 @@ def _update_triagem(
     triagem.nrs_doenca = nrs_score.nrs_doenca
     triagem.nrs_idade = nrs_score.nrs_idade
     triagem.nrs_total = nrs_score.nrs_total
+    triagem.classificacao = nrs_score.classificacao
     triagem.nrs_completo = nrs_score.nrs_completo
     triagem.nrs_ref_at = nrs_score.nrs_ref_at
     triagem.calculado_at = nrs_score.calculado_at

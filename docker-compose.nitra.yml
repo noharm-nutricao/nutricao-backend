@@ -1,8 +1,10 @@
 services:
-
   api:
     build: .
     container_name: flask-api
+    entrypoint: []
+    command: >
+      sh -c "python -m flask --app app run --host=0.0.0.0 --port=5000"
     ports:
       - "5000:5000"
     env_file:
@@ -10,6 +12,14 @@ services:
         required: false
     environment:
       DEBUG_METRICS: "1"
+      ENV: development
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: noharm
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      POTGRESQL_CONNECTION_STRING: postgresql://postgres:postgres@db:5432/noharm
+      REPORT_CONNECTION_STRING: postgresql://postgres:postgres@db:5432/noharm
     depends_on:
       db:
         condition: service_healthy
@@ -22,15 +32,16 @@ services:
     environment:
       POSTGRES_DB: noharm
       POSTGRES_USER: postgres
-      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_PASSWORD: postgres
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ${DATABASE_PATH:-./database}:/sql
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d noharm"]
       interval: 5s
+      timeout: 5s
       retries: 10
 
   db-init:
@@ -38,6 +49,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    environment:
+      PGPASSWORD: postgres
     volumes:
       - ${DATABASE_PATH:-./database}:/sql
     entrypoint: >

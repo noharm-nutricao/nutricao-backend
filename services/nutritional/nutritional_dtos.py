@@ -10,6 +10,7 @@ class NrsScoreDTO:
     nrs_doenca: int
     nrs_idade: int
     nrs_total: int
+    classificacao: str
     nrs_completo: bool
     nrs_ref_at: datetime
     calculado_at: datetime
