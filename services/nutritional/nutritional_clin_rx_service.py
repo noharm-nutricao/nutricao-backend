@@ -1,6 +1,7 @@
 
 import logging
 
+from repository.nutritional import nutritional_alert_repository
 from services.nutritional.nutritional_text_utils import normalize_text
 
 
@@ -17,45 +18,63 @@ RX_CASES = {
 }
 
 
-def calculate_clin_severity(nratendimento: int, idevolucao: int, sintomas: list[str]) -> None:
+def nutritional_alert_engine() -> None:
+    evol_pending_alerts = nutritional_alert_repository.get_evol_pending_aux_alerts()
+    for pending_alert in evol_pending_alerts:
+        calculate_clin_severity(pending_alert.nratendimento, pending_alert.sintomas)
+        nutritional_alert_repository.recon_pending_aux_alert(pending_alert.id)
+
+    pres_pending_alerts = nutritional_alert_repository.get_pres_pending_aux_alerts()
+    for pending_alert in pres_pending_alerts:
+        calculate_rx_severity(pending_alert.nratendimento, [])
+        nutritional_alert_repository.recon_pending_aux_alert(pending_alert.id)
+
+
+def calculate_clin_severity(nratendimento: int, symptoms: list[str]) -> None:
     """
     Calcula a severidade do alerta clínico a partir dos sintomas da evolução.
     """
-    for sintoma in sintomas:
-        normalized = normalize_text(sintoma)
+    registered_cases= []
+    for symptom in symptoms:
+        normalized_symptom = normalize_text(symptom)
         for key, case in CLIN_CASES.items():
-            if key in normalized:
-                logging.info(
-                    f"Alerta clin detectado: {key} | nratendimento={nratendimento} | idevolucao={idevolucao}"
-                )
-                # generate_alert será implementado no próximo commit
-                # generate_alert(
-                #     severity=case["severidade"],
-                #     nratendimento=nratendimento,
-                #     type="clin",
-                #     trigger_origin_id=idevolucao,
-                #     observation=case["observacao"],
-                # )
+            if key in normalized_symptom:
+                if key not in registered_cases:
+                    logging.info(f"Alerta clin detectado: {key} | nratendimento={nratendimento}")
+                    registered_cases.append(case)
+                    generate_alert(
+                        severity=case["severidade"],
+                        nratendimento=nratendimento,
+                        alert_type="clin",
+                        observation=case["observacao"],
+                    )
                 break
 
 
-def calculate_rx_severity(nratendimento: int, idpresmed: int, itens_prescricao: list[str]) -> None:
+def calculate_rx_severity(nratendimento: int, itens_prescricao: list[str]) -> None:
     """
     Calcula a severidade do alerta de prescrição dietética.
     """
+    registered_cases = []
     for item in itens_prescricao:
         normalized = normalize_text(item)
         for key, case in RX_CASES.items():
             if key in normalized:
-                logging.info(
-                    f"Alerta rx detectado: {key} | nratendimento={nratendimento} | idpresmed={idpresmed}"
-                )
-                # generate_alert será implementado no próximo commit
-                # generate_alert(
-                #     severity=case["severidade"],
-                #     nratendimento=nratendimento,
-                #     type="rx",
-                #     trigger_origin_id=idpresmed,
-                #     observation=case["observacao"],
-                # )
+                if key not in registered_cases:
+                    registered_cases.append(case)
+                    logging.info(f"Alerta rx detectado: {key} | nratendimento={nratendimento}")
+                    generate_alert(
+                        severity=case["severidade"],
+                        nratendimento=nratendimento,
+                        alert_type="rx",
+                        observation=case["observacao"],
+                    )
                 break
+
+def generate_alert(severity: str, nratendimento: int, alert_type: str, observation: str) -> None:
+    nutritional_alert_repository.generate_alert(
+        severity=severity,
+        nratendimento=nratendimento,
+        alert_type=alert_type,
+        observation=observation,
+    )
