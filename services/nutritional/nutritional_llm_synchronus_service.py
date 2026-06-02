@@ -67,10 +67,28 @@ def generate_summary(
     404 (atendimento inexistente), 502 (erro do LLM) e 504 (timeout do LLM).
     """
 
-    hash_input = build_hash_input(nratendimento, request_data)
-    context_hash = compute_summary_hash(hash_input)
+    hash_input : Optional[LlmSummaryHashInput] = build_hash_input(nratendimento, request_data)
+    context_hash: str = compute_summary_hash(hash_input)
 
-    # TODO próxima etapa: usar context_hash para cache/dedup em nutricional_llm_resumo
-    # (INSERT ... ON CONFLICT), chamada ao LLM (502/504), persistência e montagem da resposta
-    # {summary, generated_at, tokens_used, model}.
+    cached = nutritional_llm_repository.get_cached_summary(context_hash)
+    if cached is not None:
+        generated_at = cached.processed_at or cached.created_at
+        return {
+            "summary": cached.summary,
+            "generated_at": generated_at.isoformat() if generated_at else None,
+            "tokens_used": cached.tokens_used,
+            "model": cached.model,
+        }
+
+    nutritional_llm_repository.insert_pending_job(
+        context_hash=context_hash,
+        nratendimento=hash_input.nratendimento,
+        report_type=hash_input.report_type,
+        max_assessments=hash_input.max_assessments,
+        prompt_version=hash_input.prompt_version,
+        model=hash_input.model,
+    )
+
+    # TODO próxima etapa (fora deste prompt): montar prompt, chamar o LLM (502/504),
+    # UPDATE status=done + summary/tokens, e devolver {summary, generated_at, tokens_used, model}.
     raise NotImplementedError
