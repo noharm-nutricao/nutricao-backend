@@ -7,6 +7,9 @@ from pydantic import BaseModel, Field
 MAX_ASSESSMENTS_DEFAULT = 5
 MAX_ASSESSMENTS_CAP = 10
 
+MAX_TOKENS_DEFAULT = 800
+MAX_TOKENS_CAP = 4000
+
 
 class ReportType(str, Enum):
     """Supported LLM report types. PoC has a single one; extensible later."""
@@ -31,6 +34,8 @@ class NutritionalLlmSummaryRequest(BaseModel):
     the clinical context. Defaults to 5 and is capped at 10 (issue #88).
     ``model`` is optional and defaults to ``ANTHROPIC``; an unsupported value is
     rejected by Pydantic on the edge (400).
+    ``max_tokens`` bounds the LLM output size; it feeds the cache hash and
+    defaults to 800.
     """
 
     report_type: ReportType = ReportType.RESUMO_CLINICO
@@ -40,3 +45,8 @@ class NutritionalLlmSummaryRequest(BaseModel):
         le=MAX_ASSESSMENTS_CAP,
     )
     model: LlmModel = LlmModel.ANTHROPIC
+    max_tokens: int = Field(
+        default=MAX_TOKENS_DEFAULT,
+        ge=1,
+        le=MAX_TOKENS_CAP,
+    )
