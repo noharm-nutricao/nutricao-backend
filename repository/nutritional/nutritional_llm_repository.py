@@ -12,14 +12,17 @@ correlated to ``Patient``. They are therefore self-contained scalar subqueries,
 which keeps the limited collections (assessments/alerts) free of LATERAL.
 """
 
-from sqlalchemy import func
-from sqlalchemy.dialects.postgresql import aggregate_order_by
+from typing import Any, Mapping, Optional
 
-from models.main import db
+from sqlalchemy import Connection, func, text
+from sqlalchemy.dialects.postgresql import aggregate_order_by, insert
+
+from models.main import db, dbSession
 from models.nutritional import (
     NutritionalAlert,
     NutritionalAssessment,
     NutritionalGlim,
+    NutritionalLlmSummary,
     NutritionalScreening,
 )
 from models.prescription import Patient
@@ -202,3 +205,86 @@ def get_clinical_context(admission_number: int, max_assessments: int, max_alerts
         .filter(Patient.admissionNumber == admission_number)
         .first()
     )
+
+
+def _current_schema() -> str:
+    """Scheenant ativo, lido das execution options da conexão."""
+    connection: Connection = db.session.connection()
+    execute_options: Mapping[str, Any] = connection.get_execution_options()
+    schema_translate_map: dict = execute_options.get("schema_translate_map", {})
+    ret: str = schema_translate_map.get(None) or "demo"
+    return ret
+
+
+def _is_llm_resumo_table_ready() -> bool:
+    """True se a tabela ``nutricional_llm_resumo`` existe no schema atual."""
+    schema = _current_schema()
+    return bool(
+        db.session.execute(
+            text(
+                "SELECT EXISTS ("
+                "    SELECT 1 FROM information_schema.tables "
+                "    WHERE table_schema = :schema "
+                "      AND table_name = 'nutricional_llm_resumo'"
+                ")"
+            ),
+            {"schema": schema},
+        ).scalar()
+    )
+
+
+def get_cached_summary(context_hash: str) -> Optional[NutritionalLlmSummary]:
+    """Retorna o resumo já pronto para ``context_hash`` (HIT) ou ``None``.
+
+    Se a tabela ainda não existe (sem migration), trata como MISS (``None``).
+    """
+    if not _is_llm_resumo_table_ready():
+        return None
+
+    return (
+        db.session.query(NutritionalLlmSummary)
+        .filter(
+            NutritionalLlmSummary.context_hash == context_hash,
+            NutritionalLlmSummary.status == "done",
+        )
+        .first()
+    )
+
+
+def insert_pending_job(
+    context_hash: str,
+    nratendimento: int,
+    report_type: str,
+    max_assessments: int,
+    prompt_version: str,
+    model: str,
+) -> None:
+    """Registra o pedido (status ``pending``) de forma idempotente.
+
+    ``INSERT ... ON CONFLICT (context_hash) DO NOTHING`` + commit imediato (Opção A):
+    o marcador fica visível na hora (dedup atômico) e a conexão é liberada antes do
+    LLM. Após o commit, reaplica o schema (o ``schema_translate_map`` é perdido no
+    commit). No-op se a tabela ainda não existe.
+    """
+    if not _is_llm_resumo_table_ready():
+        return
+
+    schema = _current_schema()
+
+    stmt = (
+        insert(NutritionalLlmSummary)
+        .values(
+            context_hash=context_hash,
+            nratendimento=nratendimento,
+            report_type=report_type,
+            max_assessments=max_assessments,
+            prompt_version=prompt_version,
+            model=model,
+            status="pending",
+        )
+        .on_conflict_do_nothing(index_elements=["context_hash"])
+    )
+
+    db.session.execute(stmt)
+    db.session.commit()
+    dbSession.setSchema(schema)
