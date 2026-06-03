@@ -17,7 +17,7 @@ from models.requests.nutritional_llm_request import (
 )
 from security.permission import Permission
 from security.role import Role
-from services.nutritional import nutritional_llm_synchronus_service as svc
+from services.nutritional import nutritional_llm_synchronous_service as svc
 from services.nutritional.nutritional_llm_hash import (
     LlmSummaryHashInput,
     compute_summary_hash,
