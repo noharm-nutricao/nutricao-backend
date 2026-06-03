@@ -14,7 +14,7 @@ from exception.validation_error import ValidationError
 from models.requests.nutritional_llm_request import NutritionalLlmSummaryRequest
 from repository.nutritional import nutritional_llm_repository
 from security.permission import Permission
-from services import cognito_token_service
+from services.nutritional import cognito_token_service
 from services.nutritional import llm_worker_client
 from services.nutritional.nutritional_llm_hash import (
     LlmSummaryHashInput,
