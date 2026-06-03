@@ -8,7 +8,7 @@ Contrato do worker: 200 → ``{"response": "<texto>"}``; erros (400/403/429/502/
 import json
 
 import requests
-
+from requests.exceptions import JSONDecodeError
 from config import Config
 from exception.validation_error import ValidationError
 from services.nutritional.nutritional_llm_hash import LlmSummaryHashInput
@@ -75,7 +75,24 @@ def call_llm(model: str, prompt_text: str, access_token: str) -> str:
         )
 
     if resp.status_code == status.HTTP_200_OK:
-        return resp.json()["response"]
+        try:
+            data: dict = resp.json()
+        except JSONDecodeError as e:
+            logger.backend_logger.error(f"LLM request error: {e}")
+            raise ValidationError(
+                 "Falha ao gerar o resumo",
+                 "errors.badGateway",
+                 status.HTTP_502_BAD_GATEWAY,
+             )
+        response_text: str = data.get("response")
+        if not isinstance(response_text, str):
+            logger.backend_logger.error(f"LLM missing/invalid 'response' field: {data}")
+            raise ValidationError(
+                 "Falha ao gerar o resumo",
+                 "errors.badGateway",
+                 status.HTTP_502_BAD_GATEWAY,
+             )
+        return response_text
 
     logger.backend_logger.error(f"LLM non-200: {resp.status_code} {resp.text}")
     if resp.status_code == status.HTTP_504_GATEWAY_TIMEOUT:

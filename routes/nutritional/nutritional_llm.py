@@ -1,6 +1,6 @@
 from typing import Any
 
-from flask import Blueprint, Request, request
+from flask import Blueprint, request
 
 from decorators.api_endpoint_decorator import api_endpoint
 from models.requests.nutritional_llm_request import NutritionalLlmSummaryRequest
@@ -15,7 +15,7 @@ app_nutritional_llm: Blueprint = Blueprint("app_nutritional_llm", __name__)
 )
 @api_endpoint()
 def generate_llm_summary_synchronous(nratendimento: int, user_context: Any):
-    data: Request = request.get_json(silent=True) or {}
+    data: dict[str, Any] = request.get_json(silent=True) or {}
 
     payload = NutritionalLlmSummaryRequest(**data)
 

@@ -4,8 +4,6 @@ from .main import db
 from sqlalchemy import func, text
 from sqlalchemy.dialects import postgresql
 
-from app.extensions import db
-
 class NutritionalNrs(db.Model):
     __tablename__ = "nutricional_nrs"
 

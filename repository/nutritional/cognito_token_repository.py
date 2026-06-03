@@ -79,7 +79,7 @@ def upsert_token(
         "updated_at": func.now(),
     }
 
-    stmt: dict = (
+    stmt = (
         insert(CognitoTokenCache)
         .values(id=1, **values)
         .on_conflict_do_update(index_elements=["id"], set_=values)

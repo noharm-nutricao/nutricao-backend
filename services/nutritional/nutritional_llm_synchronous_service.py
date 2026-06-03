@@ -1,9 +1,6 @@
-"""Serviço síncrono do resumo clínico via LLM (issue #88, PoC).
-
-Esta etapa orquestra o Step 1 (contexto sem PII) e o cálculo do hash (chave de cache +
-idempotência, §3). O restante (cache/dedup → chamada ao LLM → persistência → resposta) será
-implementado a seguir.
-"""
+"""Orquestra o fluxo síncrono: monta contexto sem PII, 
+calcula hash determinístico (cache/idempotência), tenta cache HIT e, em MISS, 
+autentica (Cognito M2M), chama o worker LLM e persiste o resultado"""
 
 from typing import Literal, Optional
 
