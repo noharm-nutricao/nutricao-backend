@@ -167,3 +167,31 @@ class NutritionalLlmSummary(db.Model):
         ),
         db.Index("ix_llm_resumo_atend", "nratendimento"),
     )
+
+
+class CognitoTokenCache(db.Model):
+    """Cache do token M2M do Cognito (issue #88).
+
+    Tabela **singleton** no schema ``public`` (o token é global do backend, não por tenant). O
+    ``__table_args__ = {"schema": "public"}`` faz a tabela ignorar o ``schema_translate_map`` (que
+    só remapeia a chave ``None``), apontando sempre para ``public.cognito_token_cache``.
+    """
+
+    __tablename__ = "cognito_token_cache"
+    __table_args__ = (
+        db.CheckConstraint("id = 1", name="cognito_token_singleton"),
+        {"schema": "public"},
+    )
+
+    id = db.Column("id", db.SmallInteger, primary_key=True, server_default="1")
+    access_token = db.Column("access_token", postgresql.TEXT, nullable=False)  # cifrado
+    token_type = db.Column(
+        "token_type", db.String(20), nullable=False, server_default="Bearer"
+    )
+    expires_at = db.Column("expires_at", db.DateTime(timezone=True), nullable=False)
+    updated_at = db.Column(
+        "updated_at",
+        db.DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
