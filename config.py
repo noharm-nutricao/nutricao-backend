@@ -119,6 +119,13 @@ class Config:
 
     MARITACA_API_KEY = getenv("MARITACA_API_KEY") or ""
 
+    COGNITO_TOKEN_URL = getenv("COGNITO_TOKEN_URL") or ""
+    COGNITO_CLIENT_ID = getenv("COGNITO_CLIENT_ID") or ""
+    COGNITO_CLIENT_SECRET = getenv("COGNITO_CLIENT_SECRET") or ""
+    COGNITO_SCOPE = getenv("COGNITO_SCOPE") or ""
+
+    LLM_API_URL = getenv("LLM_API_URL") or ""
+
     REDIS_HOST = getenv("REDIS_HOST") or ""
     REDIS_PORT = getenv("REDIS_PORT") or ""
 
