@@ -21,12 +21,26 @@ def test_get_access_token_cache_hit(monkeypatch) -> None:
         "get_valid_token",
         lambda: SimpleNamespace(access_token="enc"),
     )
-    monkeypatch.setattr(svc, "decrypt_data", lambda c: "plain-token")
+    decrypted_with: dict = {}
+    monkeypatch.setattr(
+        svc,
+        "decrypt_data",
+        lambda c: decrypted_with.update(ciphertext=c) or "plain-token",
+    )
     session = MagicMock()
     monkeypatch.setattr(svc, "session", session)
+    # upsert NÃO deve ser chamado num HIT
+    upserted: list = []
+    monkeypatch.setattr(
+        svc.cognito_token_repository,
+        "upsert_token",
+        lambda *a, **k: upserted.append((a, k)),
+    )
 
     assert svc.get_access_token() == "plain-token"
+    assert decrypted_with == {"ciphertext": "enc"}  # decifra o token do cache
     session.post.assert_not_called()  # HIT → não chama o Cognito
+    assert upserted == []  # HIT → não regrava o cache
 
 
 def test_get_access_token_miss_fetches_and_upserts(monkeypatch) -> None:
@@ -62,6 +76,47 @@ def test_get_access_token_miss_fetches_and_upserts(monkeypatch) -> None:
     assert abs((captured["exp"] - expected).total_seconds()) <= (after - before).total_seconds() + 1
 
 
+def test_get_access_token_miss_uses_default_token_type(monkeypatch) -> None:
+    """Sem ``token_type`` no corpo do Cognito → default 'Bearer'."""
+    monkeypatch.setattr(svc.cognito_token_repository, "get_valid_token", lambda: None)
+    monkeypatch.setattr(svc, "encrypt_data", lambda t: f"enc:{t}")
+
+    resp = MagicMock(status_code=status.HTTP_200_OK)
+    resp.json.return_value = {"access_token": "new-token", "expires_in": 3600}
+    session = MagicMock()
+    session.post.return_value = resp
+    monkeypatch.setattr(svc, "session", session)
+
+    captured: dict = {}
+    monkeypatch.setattr(
+        svc.cognito_token_repository,
+        "upsert_token",
+        lambda enc, exp, tt: captured.update(tt=tt),
+    )
+
+    assert svc.get_access_token() == "new-token"
+    assert captured["tt"] == "Bearer"
+
+
+def test_get_access_token_coerces_expires_in_to_int(monkeypatch) -> None:
+    """``expires_in`` como string é convertido para int sem estourar o timedelta."""
+    monkeypatch.setattr(svc.cognito_token_repository, "get_valid_token", lambda: None)
+    monkeypatch.setattr(svc, "encrypt_data", lambda t: t)
+
+    resp = MagicMock(status_code=status.HTTP_200_OK)
+    resp.json.return_value = {
+        "access_token": "tok",
+        "expires_in": "3600",
+        "token_type": "Bearer",
+    }
+    session = MagicMock()
+    session.post.return_value = resp
+    monkeypatch.setattr(svc, "session", session)
+    monkeypatch.setattr(svc.cognito_token_repository, "upsert_token", lambda *a: None)
+
+    assert svc.get_access_token() == "tok"
+
+
 def test_get_access_token_timeout_maps_to_504(monkeypatch) -> None:
     monkeypatch.setattr(svc.cognito_token_repository, "get_valid_token", lambda: None)
     session = MagicMock()
@@ -82,3 +137,33 @@ def test_get_access_token_non_200_maps_to_502(monkeypatch) -> None:
     with pytest.raises(ValidationError) as exc:
         svc.get_access_token()
     assert exc.value.httpStatus == status.HTTP_502_BAD_GATEWAY
+
+
+def test_get_access_token_request_exception_maps_to_502(monkeypatch) -> None:
+    """Erros de rede que NÃO são Timeout (ex.: ConnectionError) → 502."""
+    monkeypatch.setattr(svc.cognito_token_repository, "get_valid_token", lambda: None)
+    session = MagicMock()
+    session.post.side_effect = requests.exceptions.ConnectionError("dns")
+    monkeypatch.setattr(svc, "session", session)
+
+    with pytest.raises(ValidationError) as exc:
+        svc.get_access_token()
+    assert exc.value.httpStatus == status.HTTP_502_BAD_GATEWAY
+
+
+def test_get_access_token_non_200_does_not_upsert(monkeypatch) -> None:
+    """Falha no Cognito não grava nada no cache."""
+    monkeypatch.setattr(svc.cognito_token_repository, "get_valid_token", lambda: None)
+    session = MagicMock()
+    session.post.return_value = MagicMock(status_code=500, text="err")
+    monkeypatch.setattr(svc, "session", session)
+    upserted: list = []
+    monkeypatch.setattr(
+        svc.cognito_token_repository,
+        "upsert_token",
+        lambda *a, **k: upserted.append(a),
+    )
+
+    with pytest.raises(ValidationError):
+        svc.get_access_token()
+    assert upserted == []

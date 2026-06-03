@@ -4,6 +4,7 @@ Testes puros — não tocam no banco nem precisam de app Flask.
 """
 
 from datetime import datetime
+from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any
 
@@ -11,6 +12,7 @@ import pytest
 
 from services.nutritional.nutritional_llm_hash import (
     LlmSummaryHashInput,
+    _json_default,
     build_clinical_context,
     compute_summary_hash,
 )
@@ -129,3 +131,55 @@ def test_build_clinical_context_returns_dict_copy() -> None:
 
     assert result == mapping
     assert result is not mapping  # cópia, não a mesma referência
+
+
+def test_build_clinical_context_empty_mapping() -> None:
+    row = SimpleNamespace(_mapping={})
+    assert build_clinical_context(row) == {}
+
+
+# --- _json_default ------------------------------------------------------------
+
+
+def test_json_default_serializes_datetime() -> None:
+    assert _json_default(datetime(2024, 1, 10, 8, 30, 0)) == "2024-01-10T08:30:00"
+
+
+def test_json_default_serializes_decimal_as_string() -> None:
+    assert _json_default(Decimal("1.50")) == "1.50"
+
+
+def test_json_default_raises_typeerror_on_unknown_type() -> None:
+    with pytest.raises(TypeError):
+        _json_default(object())
+
+
+def test_decimal_in_context_is_serialized(hash_input: LlmSummaryHashInput) -> None:
+    """Um Decimal aninhado no context não quebra o hash (vai via _json_default)."""
+    hash_input.context["weight"] = Decimal("72.5")
+    result = compute_summary_hash(hash_input)
+    assert len(result) == 64
+
+
+def test_decimal_equals_string_form_in_hash(
+    hash_input: LlmSummaryHashInput,
+) -> None:
+    """Decimal('72.5') e a string '72.5' colapsam no mesmo payload canônico."""
+    with_decimal = dict(hash_input.context)
+    with_decimal["weight"] = Decimal("72.5")
+    with_str = dict(hash_input.context)
+    with_str["weight"] = "72.5"
+
+    def _h(ctx: dict[str, Any]) -> str:
+        hi = LlmSummaryHashInput(
+            nratendimento=hash_input.nratendimento,
+            report_type=hash_input.report_type,
+            max_assessments=hash_input.max_assessments,
+            prompt_version=hash_input.prompt_version,
+            model=hash_input.model,
+            max_tokens=hash_input.max_tokens,
+            context=ctx,
+        )
+        return compute_summary_hash(hi)
+
+    assert _h(with_decimal) == _h(with_str)
