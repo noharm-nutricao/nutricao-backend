@@ -194,32 +194,59 @@ def test_generate_summary_returns_cached_on_hit(
     assert inserted == []  # HIT → não registra job
 
 
-def test_generate_summary_inserts_pending_on_miss(
+def test_generate_summary_runs_full_flow_on_miss(
     monkeypatch, request_data, fake_row
 ) -> None:
     _patch_context(monkeypatch, fake_row)
     monkeypatch.setattr(
         svc.nutritional_llm_repository, "get_cached_summary", lambda h: None
     )
-    captured: dict = {}
+    inserted: dict = {}
     monkeypatch.setattr(
         svc.nutritional_llm_repository,
         "insert_pending_job",
-        lambda **kw: captured.update(kw),
+        lambda **kw: inserted.update(kw),
+    )
+    # Passo 1/2 mockados: token, prompt, chamada ao LLM.
+    monkeypatch.setattr(
+        svc.cognito_token_service, "get_access_token", lambda: "tok-abc"
+    )
+    monkeypatch.setattr(
+        svc.llm_worker_client, "build_prompt", lambda hi: "PROMPT"
+    )
+    call_args: dict = {}
+    monkeypatch.setattr(
+        svc.llm_worker_client,
+        "call_llm",
+        lambda **kw: call_args.update(kw) or "Resumo gerado.",
+    )
+    done: dict = {}
+    monkeypatch.setattr(
+        svc.nutritional_llm_repository,
+        "mark_summary_done",
+        lambda **kw: done.update(kw),
     )
     user = _allow_permission(monkeypatch)
 
     expected_hash = compute_summary_hash(svc.build_hash_input(123456, request_data))
 
     with app.app_context():
-        with pytest.raises(NotImplementedError):  # LLM fora de escopo nesta etapa
-            svc.generate_summary(
-                nratendimento=123456, request_data=request_data, user_context=user
-            )
+        result = svc.generate_summary(
+            nratendimento=123456, request_data=request_data, user_context=user
+        )
 
-    assert captured["context_hash"] == expected_hash
-    assert captured["nratendimento"] == 123456
-    assert captured["report_type"] == "resumo_clinico"
-    assert captured["prompt_version"] == "resumo_clinico"
-    assert captured["model"] == "ANTHROPIC"
-    assert captured["max_assessments"] == 5
+    # registrou o pending (dedup) com o hash correto
+    assert inserted["context_hash"] == expected_hash
+    # chamou o LLM com o modelo + token + prompt
+    assert call_args == {
+        "model": "ANTHROPIC",
+        "prompt_text": "PROMPT",
+        "access_token": "tok-abc",
+    }
+    # persistiu o resultado (done) e retornou a resposta
+    assert done["context_hash"] == expected_hash
+    assert done["summary"] == "Resumo gerado."
+    assert result["summary"] == "Resumo gerado."
+    assert result["tokens_used"] is None
+    assert result["model"] == "ANTHROPIC"
+    assert result["generated_at"] is not None
