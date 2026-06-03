@@ -12,6 +12,7 @@ correlated to ``Patient``. They are therefore self-contained scalar subqueries,
 which keeps the limited collections (assessments/alerts) free of LATERAL.
 """
 
+from datetime import datetime
 from typing import Any, Mapping, Optional
 
 from sqlalchemy import Connection, func, text
@@ -288,3 +289,30 @@ def insert_pending_job(
     db.session.execute(stmt)
     db.session.commit()
     dbSession.setSchema(schema)
+
+
+def mark_summary_done(
+    context_hash: str,
+    summary: str,
+    tokens_used: Optional[int],
+    processed_at: datetime,
+) -> None:
+    """Marca o resumo como pronto (``status='done'``) na linha do ``context_hash``.
+
+    Sem commit próprio — segue a transação da request (o ``@api_endpoint`` commita). No-op se a
+    tabela ainda não existe.
+    """
+    if not _is_llm_resumo_table_ready():
+        return
+
+    db.session.query(NutritionalLlmSummary).filter(
+        NutritionalLlmSummary.context_hash == context_hash
+    ).update(
+        {
+            "status": "done",
+            "summary": summary,
+            "tokens_used": tokens_used,
+            "processed_at": processed_at,
+        },
+        synchronize_session=False,
+    )
