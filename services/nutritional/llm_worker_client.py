@@ -18,6 +18,11 @@ from utils.http_session import session
 _TIMEOUT = (3.05, 25)
 _CONTEXT_PLACEHOLDER = "{{CONTEXT_JSON}}"
 
+_BAD_GATEWAY_MESSAGE = "Falha ao gerar o resumo"
+_BAD_GATEWAY_CODE = "errors.badGateway"
+_GATEWAY_TIMEOUT_MESSAGE = "Tempo limite ao gerar o resumo"
+_GATEWAY_TIMEOUT_CODE = "errors.gatewayTimeout"
+
 PROMPTS: dict[str, str] = {
     "resumo_clinico": (
         "Você é um nutricionista clínico. Com base exclusivamente no contexto clínico "
@@ -62,15 +67,15 @@ def call_llm(model: str, prompt_text: str, access_token: str) -> str:
     except requests.exceptions.Timeout as e:
         logger.backend_logger.error(f"LLM timeout: {e}")
         raise ValidationError(
-            "Tempo limite ao gerar o resumo",
-            "errors.gatewayTimeout",
+            _GATEWAY_TIMEOUT_MESSAGE,
+            _GATEWAY_TIMEOUT_CODE,
             status.HTTP_504_GATEWAY_TIMEOUT,
         )
     except requests.exceptions.RequestException as e:
         logger.backend_logger.error(f"LLM request error: {e}")
         raise ValidationError(
-            "Falha ao gerar o resumo",
-            "errors.badGateway",
+            _BAD_GATEWAY_MESSAGE,
+            _BAD_GATEWAY_CODE,
             status.HTTP_502_BAD_GATEWAY,
         )
 
@@ -80,29 +85,29 @@ def call_llm(model: str, prompt_text: str, access_token: str) -> str:
         except JSONDecodeError as e:
             logger.backend_logger.error(f"LLM request error: {e}")
             raise ValidationError(
-                 "Falha ao gerar o resumo",
-                 "errors.badGateway",
-                 status.HTTP_502_BAD_GATEWAY,
-             )
+                _BAD_GATEWAY_MESSAGE,
+                _BAD_GATEWAY_CODE,
+                status.HTTP_502_BAD_GATEWAY,
+            )
         response_text: str = data.get("response")
         if not isinstance(response_text, str):
             logger.backend_logger.error(f"LLM missing/invalid 'response' field: {data}")
             raise ValidationError(
-                 "Falha ao gerar o resumo",
-                 "errors.badGateway",
-                 status.HTTP_502_BAD_GATEWAY,
-             )
+                _BAD_GATEWAY_MESSAGE,
+                _BAD_GATEWAY_CODE,
+                status.HTTP_502_BAD_GATEWAY,
+            )
         return response_text
 
     logger.backend_logger.error(f"LLM non-200: {resp.status_code} {resp.text}")
     if resp.status_code == status.HTTP_504_GATEWAY_TIMEOUT:
         raise ValidationError(
-            "Tempo limite ao gerar o resumo",
-            "errors.gatewayTimeout",
+            _GATEWAY_TIMEOUT_MESSAGE,
+            _GATEWAY_TIMEOUT_CODE,
             status.HTTP_504_GATEWAY_TIMEOUT,
         )
     raise ValidationError(
-        "Falha ao gerar o resumo",
-        "errors.badGateway",
+        _BAD_GATEWAY_MESSAGE,
+        _BAD_GATEWAY_CODE,
         status.HTTP_502_BAD_GATEWAY,
     )
