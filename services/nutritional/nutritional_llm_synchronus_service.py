@@ -14,12 +14,15 @@ from exception.validation_error import ValidationError
 from models.requests.nutritional_llm_request import NutritionalLlmSummaryRequest
 from repository.nutritional import nutritional_llm_repository
 from security.permission import Permission
+from services import cognito_token_service
+from services.nutritional import llm_worker_client
 from services.nutritional.nutritional_llm_hash import (
     LlmSummaryHashInput,
     build_clinical_context,
     compute_summary_hash,
 )
 from utils import status
+from utils.dateutils import now_sp
 
 
 def build_hash_input(
@@ -89,6 +92,25 @@ def generate_summary(
         model=hash_input.model,
     )
 
-    # TODO próxima etapa (fora deste prompt): montar prompt, chamar o LLM (502/504),
-    # UPDATE status=done + summary/tokens, e devolver {summary, generated_at, tokens_used, model}.
-    raise NotImplementedError
+    access_token = cognito_token_service.get_access_token()
+    prompt_text = llm_worker_client.build_prompt(hash_input)
+    summary = llm_worker_client.call_llm(
+        model=hash_input.model,
+        prompt_text=prompt_text,
+        access_token=access_token,
+    )
+
+    processed_at = now_sp()
+    nutritional_llm_repository.mark_summary_done(
+        context_hash=context_hash,
+        summary=summary,
+        tokens_used=None,
+        processed_at=processed_at,
+    )
+
+    return {
+        "summary": summary,
+        "generated_at": processed_at.isoformat(),
+        "tokens_used": None,
+        "model": hash_input.model,
+    }
