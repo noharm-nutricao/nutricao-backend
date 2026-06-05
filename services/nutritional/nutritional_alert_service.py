@@ -17,10 +17,13 @@ def get_alerts(nratendimento: int) -> list[dict]:
             {
                 "id": a.id,
                 "tipo": a.tipo,
+                "sev": a.severidade,
                 "descricao": a.descricao,
-                "severidade": a.severidade,
+                "ativo": a.ativo if a.ativo is not None else False,
                 "reconhecido": a.reconhecido or False,
+                "reconhecido_por": a.reconhecido_por,
                 "reconhecido_at": a.reconhecido_at.isoformat() if a.reconhecido_at else None,
+                "created_at": a.created_at.isoformat() if a.created_at else None,
             }
             for a in alerts
         ]

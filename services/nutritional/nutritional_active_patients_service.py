@@ -1,29 +1,19 @@
 """Service layer for GET /nutritional/patients endpoint."""
 
 from datetime import datetime, timezone
-
 import logging
 from decorators.has_permission_decorator import Permission, has_permission
 from models.enums import SegmentTypeEnum
 from models.requests.nutritional_patients_request import NutritionalPatientsRequest
 from repository import nutritional_patients_repository
+from repository.nutritional import nutritional_repository
 
 log = logging.getLogger(__name__)
 
 
 @has_permission(Permission.READ_PRESCRIPTION)
 def get_patients(request_data: NutritionalPatientsRequest):
-    """Return active admissions with basic patient data for the nutrition module.
-
-    Business logic:
-    - protocolo derived from tp_segmento (ICU=3 -> MNUTRIC, else -> NRS2002)
-    - idade calculated from dtnascimento
-    - dias calculated from dtinternacao
-    - imc calculated from peso (kg) and altura (cm)
-    - campo1 is null in this US (populated in US-BE-07)
-    - hist is empty array in this US
-    - Patient name is NOT returned (LGPD)
-    """
+    """Return active admissions with basic patient data for the nutrition module."""
 
     rows = nutritional_patients_repository.get_patients(
         setor=request_data.setor,
@@ -97,7 +87,7 @@ def get_patients(request_data: NutritionalPatientsRequest):
                 "glim_diag": glim_diag,
                 "glim_fen": glim_fen,
                 "glim_etiol": glim_etiol,
-                "inst": [],  # from demo.nutricional_alerta - empty for now
+                "inst": _build_inst(row.id),
                 "conduta": row.conduta,
                 "haval": haval,
                 "d7": d7,
@@ -213,3 +203,11 @@ def _build_campo1(protocolo, row):
         return result
 
     return None
+
+
+def _build_inst(nratendimento):
+    alerts = nutritional_repository.get_active_lab_alerts(nratendimento)
+    return [
+        {"t": alert.tipo, "sev": alert.severidade, "d": alert.descricao}
+        for alert in alerts
+    ]

@@ -844,12 +844,23 @@ def test_dieta_npo_null_this_us(client, analyst_headers):
         assert patient["npo"] is None
 
 
-def test_inst_empty_this_us(client, analyst_headers):
+def test_hist_empty_this_us(client, analyst_headers):
     response = client.get(ENDPOINT, headers=analyst_headers)
     data = response.get_json()["data"]
 
     for patient in data:
-        assert patient["inst"] == []
+        assert patient["hist"] == []
+
+
+def test_inst_structure(client, analyst_headers):
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    data = response.get_json()["data"]
+
+    for patient in data:
+        assert isinstance(patient["inst"], list)
+        for item in patient["inst"]:
+            assert set(item.keys()) == {"t", "sev", "d"}
+            assert item["t"] == "lab"
 
 
 def test_filter_ala_case_insensitive(client, analyst_headers):

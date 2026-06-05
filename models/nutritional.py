@@ -128,3 +128,14 @@ class NutritionalAlert(db.Model):
     reconhecido_por = db.Column("reconhecido_por", db.Integer, db.ForeignKey("public.usuario.idusuario"), nullable=True)
     reconhecido_at = db.Column("reconhecido_at", db.DateTime, nullable=True)
     created_at = db.Column("created_at", db.DateTime, nullable=True)
+
+
+class NutritionalAuxAlerta(db.Model):
+    __tablename__ = "nutricional_aux_alerta"
+
+    id = db.Column("id", db.Integer, primary_key=True)
+    nratendimento = db.Column("nratendimento", db.BigInteger, nullable=False)
+    fkevolucao = db.Column("fkevolucao", db.BigInteger, nullable=True)
+    fkpresmed = db.Column("fkpresmed", db.BigInteger, nullable=True)
+    fkexame = db.Column("fkexame", db.BigInteger, nullable=True)
+    reconhecido = db.Column("reconhecido", db.Boolean, default=False)
