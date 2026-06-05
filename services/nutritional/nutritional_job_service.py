@@ -79,7 +79,6 @@ def _recalculate_schema(schema: str) -> tuple:
                         schema,
                     )
                     errors += 1
-                    continue
                 logger.info(
                     "mNUTRIC recalculado nratendimento=%s schema=%s",
                     patient.nratendimento,
