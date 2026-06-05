@@ -157,13 +157,13 @@ def _build_campo1(protocolo, row):
     Returns None if no score has been calculated yet for this admission.
     For MNUTRIC patients, NRS scores are included when available.
     """
+    if not row:
+        return None
     nrs = row.nrs_data or {}
     mn = row.mnutric_data or {}
-
-    if protocolo == "NRS2002":
-        if not nrs or nrs.get("nrs_total") is None:
-            return None
-        return {
+    nrs_dict: Optional[dict] = None
+    if nrs and nrs.get("nrs_total") is not None:
+        nrs_dict = {
             "nrs_total": nrs["nrs_total"],
             "nrs_dims": {
                 "nut": nrs.get("nrs_nut") or 0,
@@ -171,17 +171,21 @@ def _build_campo1(protocolo, row):
                 "idade": nrs.get("nrs_idade") or 0,
             },
         }
+    if protocolo == "NRS2002":
+        return nrs_dict
 
     if protocolo == "MNUTRIC":
-        if not mn:
+        if not mn and not nrs_dict:
             return None
+        if not mn and nrs_dict:
+            return nrs_dict
 
         apache_manual = mn.get("mn_apache_manual") or False
         sofa_manual = mn.get("mn_sofa_manual") or False
         dados_incompletos = not apache_manual or not sofa_manual
 
         if dados_incompletos:
-            return {
+            dados_incompletos_dict: dict = {
                 "dados_incompletos": True,
                 "mn_dims": {
                     "idade": mn.get("mn_idade") or 0,
@@ -191,7 +195,9 @@ def _build_campo1(protocolo, row):
                     "dias": mn.get("mn_dias") or 0,
                 },
             }
-
+            if nrs_dict:
+                return dados_incompletos_dict | nrs_dict
+            return dados_incompletos_dict
         result = {
             "mnutric_total": mn["mn_total"],
             "mn_dims": {
@@ -202,13 +208,8 @@ def _build_campo1(protocolo, row):
                 "dias": mn.get("mn_dias") or 0,
             },
         }
-        if nrs and nrs.get("nrs_total") is not None:
-            result["nrs_total"] = nrs["nrs_total"]
-            result["nrs_dims"] = {
-                "nut": nrs.get("nrs_nut") or 0,
-                "doenca": nrs.get("nrs_doenca") or 0,
-                "idade": nrs.get("nrs_idade") or 0,
-            }
+        if nrs_dict:
+            return result | nrs_dict
         return result
 
     return None
