@@ -2,8 +2,6 @@
 
 from datetime import datetime, timezone
 import logging
-from typing import Dict, Optional
-
 from decorators.has_permission_decorator import Permission, has_permission
 from models.enums import SegmentTypeEnum
 from models.requests.nutritional_patients_request import NutritionalPatientsRequest
@@ -35,7 +33,6 @@ def get_patients(request_data: NutritionalPatientsRequest):
 
     patients = []
     now = datetime.now(timezone.utc)
-    freq_horas_map: Dict[str, int] = {'12h': 12, '24h': 24, '48h': 48, '7d': 168}
 
     for idx, row in enumerate(rows, start=1):
         log.info("Processing patient idx=%s | id=%s", idx, row.id)
@@ -72,8 +69,8 @@ def get_patients(request_data: NutritionalPatientsRequest):
         # sev: default to "bx" in Sprint 0
         sev = row.sev if row.sev else "bx"
 
-        # freq_horas
-        freq_horas: Optional[int] = freq_horas_map.get(row.freq_horas)
+        freq_horas = row.freq_horas
+
         # GLIM fields
         glim_diag = row.glim_diag if row.glim_diag else None
         glim_fen = row.glim_fen if row.glim_fen else []

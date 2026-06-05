@@ -99,6 +99,19 @@ def _ensure_schema():
             nratendimento BIGINT NOT NULL,
             protocolo VARCHAR(10) NOT NULL DEFAULT 'NRS2002',
             classificacao TEXT,
+            nrs_nut INTEGER,
+            nrs_doenca INTEGER,
+            nrs_idade INTEGER,
+            nrs_total INTEGER,
+            nrs_completo BOOLEAN DEFAULT FALSE,
+            mn_idade INTEGER,
+            mn_apache INTEGER,
+            mn_sofa INTEGER,
+            mn_comor INTEGER,
+            mn_dias INTEGER,
+            mn_total INTEGER,
+            mn_apache_manual BOOLEAN,
+            mn_sofa_manual BOOLEAN,
             created_at TIMESTAMP NOT NULL DEFAULT NOW()
         )""",
         """CREATE TABLE IF NOT EXISTS demo.nutricional_glim (
@@ -134,6 +147,29 @@ def _ensure_schema():
             "ADD COLUMN IF NOT EXISTS frequencia VARCHAR(8)"
         )
     )
+
+    triagem_columns = [
+        "nrs_nut INTEGER",
+        "nrs_doenca INTEGER",
+        "nrs_idade INTEGER",
+        "nrs_total INTEGER",
+        "nrs_completo BOOLEAN DEFAULT FALSE",
+        "mn_idade INTEGER",
+        "mn_apache INTEGER",
+        "mn_sofa INTEGER",
+        "mn_comor INTEGER",
+        "mn_dias INTEGER",
+        "mn_total INTEGER",
+        "mn_apache_manual BOOLEAN",
+        "mn_sofa_manual BOOLEAN",
+    ]
+    for column in triagem_columns:
+        session.execute(
+            text(
+                f"ALTER TABLE demo.nutricional_triagem "
+                f"ADD COLUMN IF NOT EXISTS {column}"
+            )
+        )
 
     session_commit()
 
@@ -524,6 +560,58 @@ def test_freq_horas_mapping(client, analyst_headers):
     uti = _find_patient(data, _ADM_ACTIVE_UTI)
     assert uti is not None
     assert uti["freq_horas"] == 24
+
+
+def test_freq_horas_null_without_assessment(client, analyst_headers):
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    data = response.get_json()["data"]
+
+    enf = _find_patient(data, _ADM_ACTIVE_ENF)
+    assert enf is not None
+    assert enf["freq_horas"] is None
+
+
+def test_freq_horas_uses_latest_assessment_48h(client, analyst_headers):
+    _delete_assessments(_ADM_ACTIVE_ENF)
+    _insert_assessment_with_freq(_ADM_ACTIVE_ENF, "24h", created_at="2024-01-01 10:00:00")
+    _insert_assessment_with_freq(_ADM_ACTIVE_ENF, "48h", created_at="2024-01-02 10:00:00")
+
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    data = response.get_json()["data"]
+
+    enf = _find_patient(data, _ADM_ACTIVE_ENF)
+    assert enf is not None
+    assert enf["freq_horas"] == 48
+
+    _delete_assessments(_ADM_ACTIVE_ENF)
+
+
+def test_freq_horas_7d_maps_to_168(client, analyst_headers):
+    _delete_assessments(_ADM_ACTIVE_ENF)
+    _insert_assessment_with_freq(_ADM_ACTIVE_ENF, "7d")
+
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    data = response.get_json()["data"]
+
+    enf = _find_patient(data, _ADM_ACTIVE_ENF)
+    assert enf is not None
+    assert enf["freq_horas"] == 168
+
+    _delete_assessments(_ADM_ACTIVE_ENF)
+
+
+def test_freq_horas_rotina_is_null(client, analyst_headers):
+    _delete_assessments(_ADM_ACTIVE_ENF)
+    _insert_assessment_with_freq(_ADM_ACTIVE_ENF, "rotina")
+
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    data = response.get_json()["data"]
+
+    enf = _find_patient(data, _ADM_ACTIVE_ENF)
+    assert enf is not None
+    assert enf["freq_horas"] is None
+
+    _delete_assessments(_ADM_ACTIVE_ENF)
 
 
 def test_default_null_fields(client, analyst_headers):
@@ -1114,6 +1202,25 @@ def _insert_assessment(nratendimento, conduta="Conduta teste", created_at=None):
             """
         ),
         {"adm": nratendimento, "conduta": conduta},
+    ).fetchone()
+    session_commit()
+    return row.id
+
+
+def _insert_assessment_with_freq(nratendimento, frequencia, created_at=None):
+    """Insert a nutricional_avaliacao row with a specific frequencia."""
+    created_at_expr = f"'{created_at}'" if created_at else "NOW()"
+    row = session.execute(
+        text(
+            f"""
+            INSERT INTO demo.nutricional_avaliacao
+                (nratendimento, conduta, frequencia, ingestao, meta_kcal, meta_prot, created_at, idusuario)
+            VALUES
+                (:adm, 'Conduta teste', :frequencia, 80, 2000, 100, {created_at_expr}, 1)
+            RETURNING id
+            """
+        ),
+        {"adm": nratendimento, "frequencia": frequencia},
     ).fetchone()
     session_commit()
     return row.id
