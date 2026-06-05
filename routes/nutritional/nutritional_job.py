@@ -32,7 +32,7 @@ def run_job():
 @app_nutritional_job.route("/nutritional/job/status", methods=["GET"])
 @api_endpoint(is_admin=True)
 def job_status():
-    """Return whether the background recalculation thread is alive."""
+    """Return scheduler state and last run metrics."""
     import threading
     thread = next(
         (t for t in threading.enumerate() if t.name == "nutritional-recalc"),
@@ -41,4 +41,5 @@ def job_status():
     return {
         "scheduler": "running" if thread and thread.is_alive() else "stopped",
         "thread": thread.name if thread else None,
+        "last_run": nutritional_job_service._last_run,
     }

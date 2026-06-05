@@ -1,7 +1,7 @@
-"""Nutritional job service — US-BE-06.
+"""Nutritional job service — US-BE-06 / US-BE-16.
 
-Periodic recalculation of Campo 1 scores (NRS-2002 and mNUTRIC) for all
-active admissions across every active tenant schema.
+Periodic recalculation of Campo 1 scores (NRS-2002 and mNUTRIC) and Campo 3
+alerts (clin/rx) for all active admissions across every active tenant schema.
 
 Runs outside the JWT request context: schema is set manually via
 dbSession.setSchema() before each database operation, and re-set after
@@ -19,9 +19,12 @@ from models.main import User, db, dbSession
 from repository.nutritional import nutritional_repository
 from repository.nutritional.nutritional_nrs_repository import get_patient_department
 from services.nutritional import nutritional_nrs_service, nutritional_patient_service
+from services.nutritional.nutritional_clin_rx_service import nutritional_alert_engine
 from services.nutritional.nutritional_nrs_service import is_uti_wrapper
 
 logger = logging.getLogger("noharm.nutritional")
+
+_last_run: dict = {"at": None, "processed": 0, "errors": 0, "duration_ms": 0}
 
 
 def _get_active_schemas() -> list:
@@ -40,11 +43,10 @@ def _get_active_schemas() -> list:
 
 
 def _recalculate_schema(schema: str) -> tuple:
-    """Recalculate Campo 1 for all active admissions in a single tenant schema.
+    """Recalculate Campo 1 scores and Campo 3 alerts for all active admissions.
 
     Sets schema_translate_map + search_path before each operation so that
-    both ORM queries (is_uti, recalculate_nrs) and raw SQL (get_active_admissions)
-    resolve to the correct tenant tables.
+    both ORM queries and raw SQL resolve to the correct tenant tables.
 
     Returns (processed, errors) counts.
     """
@@ -92,6 +94,22 @@ def _recalculate_schema(schema: str) -> tuple:
                 schema,
             )
 
+            # Campo 3 alerts — isolated so failures never revert NRS/mNUTRIC commit
+            try:
+                nutritional_alert_engine()
+                logger.info(
+                    "Alertas Campo 3 processados nratendimento=%s schema=%s",
+                    patient.nratendimento,
+                    schema,
+                )
+            except Exception as trigger_err:
+                logger.warning(
+                    "Falha alertas nratendimento=%s schema=%s: %s",
+                    patient.nratendimento,
+                    schema,
+                    trigger_err,
+                )
+
             db.session.commit()
             processed += 1
         except Exception as e:
@@ -115,7 +133,7 @@ def _recalculate_schema(schema: str) -> tuple:
 
 
 def recalculate_nutritional_scores(app):
-    """Recalculate Campo 1 scores for every active tenant schema.
+    """Recalculate Campo 1 scores and Campo 3 alerts for every active tenant schema.
 
     Called by the background thread and by the manual trigger endpoint
     POST /nutritional/job/run. Pushes its own app context so it can run
@@ -124,6 +142,10 @@ def recalculate_nutritional_scores(app):
     Args:
         app: Flask application instance.
     """
+    global _last_run
+
+    start = time.monotonic()
+
     with app.app_context():
         schemas = _get_active_schemas()
         logger.info(
@@ -143,10 +165,20 @@ def recalculate_nutritional_scores(app):
                     "Erro inesperado no schema=%s: %s", schema, e, exc_info=True
                 )
 
+        duration_ms = round((time.monotonic() - start) * 1000)
+
+        _last_run = {
+            "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "processed": total_processed,
+            "errors": total_errors,
+            "duration_ms": duration_ms,
+        }
+
         logger.info(
-            "Recalculo concluido. Total processados: %d, Total erros: %d",
+            "Recalculo concluido. Total processados: %d, Total erros: %d, Duracao: %dms",
             total_processed,
             total_errors,
+            duration_ms,
         )
 
 

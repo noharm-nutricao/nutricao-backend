@@ -392,7 +392,8 @@ def get_alertas(nratendimento: int):
         .filter(
             NutritionalAlert.nratendimento == nratendimento,
             NutritionalAlert.ativo == True,
-            )
+            NutritionalAlert.reconhecido == False,
+        )
         .all()
     )
 

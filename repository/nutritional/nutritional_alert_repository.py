@@ -43,8 +43,7 @@ def recon_pending_aux_alert(id: int) -> None:
          WHERE id = :id
         """
     )
-    result = db.session.execute(query, {"id": id})
-    return result.fetchone()
+    db.session.execute(query, {"id": id})
 
 
 def generate_alert(severity: str, nratendimento: int, alert_type: str, observation: str):
@@ -73,10 +72,9 @@ def generate_alert(severity: str, nratendimento: int, alert_type: str, observati
         )
         """
     )
-    result = db.session.execute(query, {
+    db.session.execute(query, {
         "nratendimento": nratendimento,
         "tipo": alert_type,
         "descricao": observation,
         "severidade": severity
     })
-    return result.fetchone()

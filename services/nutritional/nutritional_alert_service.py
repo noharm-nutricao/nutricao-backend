@@ -16,10 +16,10 @@ def get_alerts(nratendimento: int) -> list[dict]:
         return [
             {
                 "id": a.id,
-                "tipo": a.tipo,
-                "descricao": a.descricao,
-                "severidade": a.severidade,
-                "reconhecido": a.reconhecido or False,
+                "t": a.tipo,
+                "d": a.descricao,
+                "sev": a.severidade,
+                "al_ok": a.reconhecido or False,
                 "reconhecido_at": a.reconhecido_at.isoformat() if a.reconhecido_at else None,
             }
             for a in alerts

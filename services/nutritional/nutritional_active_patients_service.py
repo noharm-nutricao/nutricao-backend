@@ -97,7 +97,7 @@ def get_patients(request_data: NutritionalPatientsRequest):
                 "glim_diag": glim_diag,
                 "glim_fen": glim_fen,
                 "glim_etiol": glim_etiol,
-                "inst": [],  # from demo.nutricional_alerta - empty for now
+                "inst": row.inst if row.inst else [],
                 "conduta": row.conduta,
                 "haval": haval,
                 "d7": d7,
