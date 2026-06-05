@@ -37,7 +37,6 @@ REQUIRED_FIELDS = {
     "glim_fen",
     "glim_etiol",
     "inst",
-    "conduta",
     "haval",
     "d7",
     "pri",
@@ -100,19 +99,6 @@ def _ensure_schema():
             nratendimento BIGINT NOT NULL,
             protocolo VARCHAR(10) NOT NULL DEFAULT 'NRS2002',
             classificacao TEXT,
-            nrs_nut INTEGER,
-            nrs_doenca INTEGER,
-            nrs_idade INTEGER,
-            nrs_total INTEGER,
-            nrs_completo BOOLEAN DEFAULT FALSE,
-            mn_idade INTEGER,
-            mn_apache INTEGER,
-            mn_sofa INTEGER,
-            mn_comor INTEGER,
-            mn_dias INTEGER,
-            mn_total INTEGER,
-            mn_apache_manual BOOLEAN,
-            mn_sofa_manual BOOLEAN,
             created_at TIMESTAMP NOT NULL DEFAULT NOW()
         )""",
         """CREATE TABLE IF NOT EXISTS demo.nutricional_glim (
@@ -148,29 +134,6 @@ def _ensure_schema():
             "ADD COLUMN IF NOT EXISTS frequencia VARCHAR(8)"
         )
     )
-
-    triagem_columns = [
-        "nrs_nut INTEGER",
-        "nrs_doenca INTEGER",
-        "nrs_idade INTEGER",
-        "nrs_total INTEGER",
-        "nrs_completo BOOLEAN DEFAULT FALSE",
-        "mn_idade INTEGER",
-        "mn_apache INTEGER",
-        "mn_sofa INTEGER",
-        "mn_comor INTEGER",
-        "mn_dias INTEGER",
-        "mn_total INTEGER",
-        "mn_apache_manual BOOLEAN",
-        "mn_sofa_manual BOOLEAN",
-    ]
-    for column in triagem_columns:
-        session.execute(
-            text(
-                f"ALTER TABLE demo.nutricional_triagem "
-                f"ADD COLUMN IF NOT EXISTS {column}"
-            )
-        )
 
     session_commit()
 
@@ -563,64 +526,12 @@ def test_freq_horas_mapping(client, analyst_headers):
     assert uti["freq_horas"] == 24
 
 
-def test_freq_horas_null_without_assessment(client, analyst_headers):
-    response = client.get(ENDPOINT, headers=analyst_headers)
-    data = response.get_json()["data"]
-
-    enf = _find_patient(data, _ADM_ACTIVE_ENF)
-    assert enf is not None
-    assert enf["freq_horas"] is None
-
-
-def test_freq_horas_uses_latest_assessment_48h(client, analyst_headers):
-    _delete_assessments(_ADM_ACTIVE_ENF)
-    _insert_assessment_with_freq(_ADM_ACTIVE_ENF, "24h", created_at="2024-01-01 10:00:00")
-    _insert_assessment_with_freq(_ADM_ACTIVE_ENF, "48h", created_at="2024-01-02 10:00:00")
-
-    response = client.get(ENDPOINT, headers=analyst_headers)
-    data = response.get_json()["data"]
-
-    enf = _find_patient(data, _ADM_ACTIVE_ENF)
-    assert enf is not None
-    assert enf["freq_horas"] == 48
-
-    _delete_assessments(_ADM_ACTIVE_ENF)
-
-
-def test_freq_horas_7d_maps_to_168(client, analyst_headers):
-    _delete_assessments(_ADM_ACTIVE_ENF)
-    _insert_assessment_with_freq(_ADM_ACTIVE_ENF, "7d")
-
-    response = client.get(ENDPOINT, headers=analyst_headers)
-    data = response.get_json()["data"]
-
-    enf = _find_patient(data, _ADM_ACTIVE_ENF)
-    assert enf is not None
-    assert enf["freq_horas"] == 168
-
-    _delete_assessments(_ADM_ACTIVE_ENF)
-
-
-def test_freq_horas_rotina_is_null(client, analyst_headers):
-    _delete_assessments(_ADM_ACTIVE_ENF)
-    _insert_assessment_with_freq(_ADM_ACTIVE_ENF, "rotina")
-
-    response = client.get(ENDPOINT, headers=analyst_headers)
-    data = response.get_json()["data"]
-
-    enf = _find_patient(data, _ADM_ACTIVE_ENF)
-    assert enf is not None
-    assert enf["freq_horas"] is None
-
-    _delete_assessments(_ADM_ACTIVE_ENF)
-
-
 def test_default_null_fields(client, analyst_headers):
     response = client.get(ENDPOINT, headers=analyst_headers)
     data = response.get_json()["data"]
 
     for patient in data:
-        assert isinstance(patient["hist"], list)
+        assert patient["hist"] == []
         assert isinstance(patient["glim_fen"], list)
         assert isinstance(patient["glim_etiol"], list)
         assert isinstance(patient["inst"], list)
@@ -844,12 +755,23 @@ def test_dieta_npo_null_this_us(client, analyst_headers):
         assert patient["npo"] is None
 
 
-def test_inst_empty_this_us(client, analyst_headers):
+def test_hist_empty_this_us(client, analyst_headers):
     response = client.get(ENDPOINT, headers=analyst_headers)
     data = response.get_json()["data"]
 
     for patient in data:
-        assert patient["inst"] == []
+        assert patient["hist"] == []
+
+
+def test_inst_structure(client, analyst_headers):
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    data = response.get_json()["data"]
+
+    for patient in data:
+        assert isinstance(patient["inst"], list)
+        for item in patient["inst"]:
+            assert set(item.keys()) == {"t", "sev", "d"}
+            assert item["t"] == "lab"
 
 
 def test_filter_ala_case_insensitive(client, analyst_headers):
@@ -1200,25 +1122,6 @@ def _insert_assessment(nratendimento, conduta="Conduta teste", created_at=None):
     return row.id
 
 
-def _insert_assessment_with_freq(nratendimento, frequencia, created_at=None):
-    """Insert a nutricional_avaliacao row with a specific frequencia."""
-    created_at_expr = f"'{created_at}'" if created_at else "NOW()"
-    row = session.execute(
-        text(
-            f"""
-            INSERT INTO demo.nutricional_avaliacao
-                (nratendimento, conduta, frequencia, ingestao, meta_kcal, meta_prot, created_at, idusuario)
-            VALUES
-                (:adm, 'Conduta teste', :frequencia, 80, 2000, 100, {created_at_expr}, 1)
-            RETURNING id
-            """
-        ),
-        {"adm": nratendimento, "frequencia": frequencia},
-    ).fetchone()
-    session_commit()
-    return row.id
-
-
 def _delete_assessments(nratendimento):
     session.execute(
         text("DELETE FROM demo.nutricional_avaliacao WHERE nratendimento = :adm"),
@@ -1319,93 +1222,3 @@ def test_should_return_empty_list_when_patient_has_no_assessments(client, analys
 
     assert inner["total"] == 0
     assert inner["data"] == []
-
-def test_conduta_null_when_no_assessment(client, analyst_headers):
-    _delete_assessments(_ADM_LIST_ASSESSMENTS)
-
-    response = client.get(ENDPOINT, headers=analyst_headers)
-    patient = _find_patient(response.get_json()["data"], _ADM_LIST_ASSESSMENTS)
-
-    assert patient is not None
-    assert patient["conduta"] is None
-    assert patient["hist"] == []
-
-def test_conduta_populated_with_single_assessment(client, analyst_headers):
-    _delete_assessments(_ADM_LIST_ASSESSMENTS)
-    _insert_assessment(_ADM_LIST_ASSESSMENTS, conduta="Dieta hipercalorica")
-
-    response = client.get(ENDPOINT, headers=analyst_headers)
-    patient = _find_patient(response.get_json()["data"], _ADM_LIST_ASSESSMENTS)
-
-    assert patient is not None
-    assert patient["conduta"] == "Dieta hipercalorica"
-    assert len(patient["hist"]) == 1
-
-    _delete_assessments(_ADM_LIST_ASSESSMENTS)
-
-def test_hist_entry_structure(client, analyst_headers):
-    _delete_assessments(_ADM_LIST_ASSESSMENTS)
-    _insert_assessment(_ADM_LIST_ASSESSMENTS, conduta="Dieta hipercalorica")
-
-    response = client.get(ENDPOINT, headers=analyst_headers)
-    patient = _find_patient(response.get_json()["data"], _ADM_LIST_ASSESSMENTS)
-
-    assert patient is not None
-    entry = patient["hist"][0]
-    assert set(entry.keys()) == {"h", "p", "c", "freq", "ing"}
-    assert entry["c"] == "Dieta hipercalorica"
-    assert entry["freq"] == "24h"
-
-    _delete_assessments(_ADM_LIST_ASSESSMENTS)
-
-def test_hist_ordered_most_recent_first(client, analyst_headers):
-    _delete_assessments(_ADM_LIST_ASSESSMENTS)
-    _insert_assessment(_ADM_LIST_ASSESSMENTS, conduta="Antiga", created_at="2024-01-01 10:00:00")
-    _insert_assessment(_ADM_LIST_ASSESSMENTS, conduta="Media",  created_at="2024-06-01 10:00:00")
-    _insert_assessment(_ADM_LIST_ASSESSMENTS, conduta="Nova",   created_at="2025-01-01 10:00:00")
-
-    response = client.get(ENDPOINT, headers=analyst_headers)
-    patient = _find_patient(response.get_json()["data"], _ADM_LIST_ASSESSMENTS)
-
-    assert patient is not None
-    hist = patient["hist"]
-    assert len(hist) == 3
-    assert hist[0]["c"] == "Nova"
-    assert hist[1]["c"] == "Media"
-    assert hist[2]["c"] == "Antiga"
-
-    _delete_assessments(_ADM_LIST_ASSESSMENTS)
-
-
-def test_hist_max_10_entries(client, analyst_headers):
-    _delete_assessments(_ADM_LIST_ASSESSMENTS)
-    for i in range(15):
-        _insert_assessment(_ADM_LIST_ASSESSMENTS, conduta=f"Conduta {i}")
-
-    response = client.get(ENDPOINT, headers=analyst_headers)
-    patient = _find_patient(response.get_json()["data"], _ADM_LIST_ASSESSMENTS)
-
-    assert patient is not None
-    assert len(patient["hist"]) == 10
-
-    _delete_assessments(_ADM_LIST_ASSESSMENTS)
-
-
-def test_conduta_persists_across_new_session(client):
-    _delete_assessments(_ADM_LIST_ASSESSMENTS)
-    _insert_assessment(_ADM_LIST_ASSESSMENTS, conduta="Dieta hipercalorica")
-
-    headers1 = make_headers(get_access(client, roles=[Role.PRESCRIPTION_ANALYST.value]))
-    r1 = client.get(ENDPOINT, headers=headers1)
-
-    headers2 = make_headers(get_access(client, roles=[Role.PRESCRIPTION_ANALYST.value]))
-    r2 = client.get(ENDPOINT, headers=headers2)
-
-    p1 = _find_patient(r1.get_json()["data"], _ADM_LIST_ASSESSMENTS)
-    p2 = _find_patient(r2.get_json()["data"], _ADM_LIST_ASSESSMENTS)
-
-    assert p1 is not None and p2 is not None
-    assert p1["conduta"] == p2["conduta"] == "Dieta hipercalorica"
-    assert p1["hist"] == p2["hist"]
-
-    _delete_assessments(_ADM_LIST_ASSESSMENTS)

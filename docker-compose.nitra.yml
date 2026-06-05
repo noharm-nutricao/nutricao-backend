@@ -59,7 +59,15 @@ services:
       psql -h db -U postgres -d noharm -f /sql/noharm-create.sql &&
       psql -h db -U postgres -d noharm -f /sql/noharm-newuser.sql &&
       psql -h db -U postgres -d noharm -f /sql/noharm-triggers.sql &&
-      psql -h db -U postgres -d noharm -f /sql/noharm-insert.sql
+      psql -h db -U postgres -d noharm -f /sql/noharm-insert.sql &&
+      psql -h db -U postgres -d noharm -f /sql/migrations/flyway/V1__create_public_schema.sql &&
+      psql -h db -U postgres -d noharm -f /sql/migrations/flyway/V2__create_demo_schema.sql &&
+      psql -h db -U postgres -d noharm -f /sql/migrations/flyway/V3__create_triggers.sql &&
+      psql -h db -U postgres -d noharm -f /sql/migrations/flyway/V4__seed_data.sql &&
+      psql -h db -U postgres -d noharm -f /sql/migrations/flyway/V5__nitra_test_seed.sql &&
+      psql -h db -U postgres -d noharm -f /sql/migrations/flyway/V6__create_alert_utils.sql &&
+      psql -h db -U postgres -d noharm -f /sql/migrations/flyway/V7__nutritional_lab_alerts.sql &&
+      psql -h db -U postgres -d noharm -f /sql/migrations/flyway/R__users_permissions.sql
       "
 
   prometheus:

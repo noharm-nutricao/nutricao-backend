@@ -1,17 +1,22 @@
 from datetime import datetime, timedelta, timezone
-from sqlalchemy import text
+from sqlalchemy import func, or_, text
 
 from exception.validation_error import ValidationError
 from models.enums import SegmentTypeEnum
 from models.main import db
 from models.nutritional import (
+    NutritionalAlert,
     NutritionalAssessment,
+    NutritionalAuxAlerta,
     NutritionalD7,
     NutritionalGlim,
     NutritionalScreening,
 )
-from models.prescription import Patient
+from models.prescription import Patient, Prescription, PrescriptionDrug
+from models.segment import Exams, SegmentExam
 from utils import status
+
+MONITORED_EXAMS = ["ALB", "HB", "P", "MG", "K", "PCR"]
 
 
 def get_patients_repository():
@@ -407,3 +412,138 @@ def get_alerta(nratendimento: int, alerta_id: int):
         )
         .first()
     )
+
+
+def get_active_lab_alerts(nratendimento: int):
+    return (
+        db.session.query(NutritionalAlert)
+        .filter(
+            NutritionalAlert.nratendimento == nratendimento,
+            NutritionalAlert.tipo == "lab",
+            NutritionalAlert.ativo.is_(True),
+        )
+        .all()
+    )
+
+
+def get_lab_pending_aux_alerts():
+    return (
+        db.session.query(NutritionalAuxAlerta)
+        .filter(
+            NutritionalAuxAlerta.reconhecido.is_(False),
+            NutritionalAuxAlerta.fkexame.isnot(None),
+        )
+        .all()
+    )
+
+
+def recon_pending_aux_alert(aux_id: int):
+    (
+        db.session.query(NutritionalAuxAlerta)
+        .filter(NutritionalAuxAlerta.id == aux_id)
+        .update({NutritionalAuxAlerta.reconhecido: True}, synchronize_session=False)
+    )
+    db.session.flush()
+
+
+def get_latest_monitored_exams(nratendimento: int) -> dict:
+    rows = (
+        db.session.query(Exams.typeExam, Exams.value, Exams.date)
+        .filter(
+            Exams.admissionNumber == nratendimento,
+            func.upper(Exams.typeExam).in_(MONITORED_EXAMS),
+        )
+        .order_by(Exams.typeExam, Exams.date.desc())
+        .all()
+    )
+    latest: dict = {}
+    for tpexame, resultado, _date in rows:
+        key = tpexame.upper()
+        if key not in latest:
+            latest[key] = resultado
+    return latest
+
+
+def get_patient_segment_id(nratendimento: int):
+    row = (
+        db.session.query(Prescription.idSegment)
+        .filter(Prescription.admissionNumber == nratendimento)
+        .order_by(Prescription.date.desc())
+        .first()
+    )
+    return row.idSegment if row else None
+
+
+def get_exam_limit(idsegmento, tpexame: str):
+    if idsegmento is None:
+        return None
+    return (
+        db.session.query(SegmentExam)
+        .filter(
+            SegmentExam.idSegment == idsegmento,
+            func.upper(SegmentExam.typeExam) == tpexame.upper(),
+            SegmentExam.active.is_(True),
+        )
+        .first()
+    )
+
+
+def get_ne_npt_pos_npo(nratendimento: int) -> bool:
+    base = (
+        db.session.query(PrescriptionDrug)
+        .join(Prescription, Prescription.id == PrescriptionDrug.idPrescription)
+        .filter(
+            Prescription.admissionNumber == nratendimento,
+            func.lower(func.trim(PrescriptionDrug.source)).in_(["dieta", "dietas"]),
+        )
+    )
+
+    ne_npt_ativo = (
+        base.filter(
+            PrescriptionDrug.suspendedDate.is_(None),
+            or_(
+                PrescriptionDrug.tube.is_(True),
+                PrescriptionDrug.intravenous.is_(True),
+            ),
+        ).first()
+        is not None
+    )
+
+    npo = (
+        base.filter(
+            PrescriptionDrug.suspendedDate.isnot(None),
+            PrescriptionDrug.tube.isnot(True),
+            PrescriptionDrug.intravenous.isnot(True),
+        ).first()
+        is not None
+    )
+
+    return ne_npt_ativo and npo
+
+
+def create_lab_alert(nratendimento: int, descricao: str, severidade) -> NutritionalAlert:
+    alert = NutritionalAlert()
+    alert.nratendimento = nratendimento
+    alert.tipo = "lab"
+    alert.descricao = descricao
+    alert.severidade = severidade
+    alert.ativo = True
+    alert.reconhecido = False
+    alert.reconhecido_por = None
+    alert.reconhecido_at = None
+    alert.created_at = datetime.now(timezone.utc)
+
+    db.session.add(alert)
+    db.session.flush()
+    return alert
+
+
+def deactivate_lab_alert(alert: NutritionalAlert):
+    alert.ativo = False
+    db.session.flush()
+
+
+def set_lab_severity(alert: NutritionalAlert, severidade):
+    if alert.severidade != severidade:
+        alert.severidade = severidade
+        db.session.flush()

@@ -1,5 +1,3 @@
-"""Unit tests: nutritional_alert_service."""
-
 from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -9,90 +7,100 @@ import pytest
 from services.nutritional import nutritional_alert_service as service
 
 
-def _alerta(id, tipo, descricao, severidade, reconhecido=False, reconhecido_at=None):
+def _alerta(
+    id,
+    tipo,
+    descricao,
+    severidade,
+    ativo=True,
+    reconhecido=False,
+    reconhecido_por=None,
+    reconhecido_at=None,
+    created_at=None,
+):
     return SimpleNamespace(
         id=id,
         tipo=tipo,
         descricao=descricao,
         severidade=severidade,
+        ativo=ativo,
         reconhecido=reconhecido,
+        reconhecido_por=reconhecido_por,
         reconhecido_at=reconhecido_at,
+        created_at=created_at,
     )
 
 
-@pytest.mark.parametrize(
-    "alertas, expected",
-    [
-        pytest.param(
-            [
-                _alerta(1, "nutricional", "Risco de desnutrição", "alta"),
-                _alerta(2, "hidrico", "Déficit hídrico", "media"),
-            ],
-            [
-                {"id": 1, "tipo": "nutricional", "descricao": "Risco de desnutrição", "severidade": "alta", "reconhecido": False, "reconhecido_at": None},
-                {"id": 2, "tipo": "hidrico", "descricao": "Déficit hídrico", "severidade": "media", "reconhecido": False, "reconhecido_at": None},
-            ],
-            id="retorna-lista-com-alertas",
-        ),
-        pytest.param([], [], id="retorna-lista-vazia"),
-        pytest.param(
-            [_alerta(3, "nutricional", "Alerta reconhecido", "baixa", reconhecido=True)],
-            [{"id": 3, "tipo": "nutricional", "descricao": "Alerta reconhecido", "severidade": "baixa", "reconhecido": True, "reconhecido_at": None}],
-            id="reconhecido-sem-data",
-        ),
-    ],
-)
 @patch("services.nutritional.nutritional_alert_service.nutritional_repository")
-def test_get_alertas_caminho_feliz(mock_repo, alertas, expected):
-    """get_alertas: retorna lista de alertas corretamente mapeada"""
-    mock_repo.get_alertas.return_value = alertas
+def test_get_alerts_mapeia_contrato_completo(mock_repo):
+    mock_repo.get_alertas.return_value = [
+        _alerta(
+            1,
+            "clin",
+            "Baixa ingestao",
+            "md",
+            created_at=datetime(2026, 5, 20, 8, 14, 0),
+        )
+    ]
     result = service.get_alerts.__wrapped__(9999)
-    assert result == expected
+    assert result == [
+        {
+            "id": 1,
+            "tipo": "clin",
+            "sev": "md",
+            "descricao": "Baixa ingestao",
+            "ativo": True,
+            "reconhecido": False,
+            "reconhecido_por": None,
+            "reconhecido_at": None,
+            "created_at": "2026-05-20T08:14:00",
+        }
+    ]
     mock_repo.get_alertas.assert_called_once_with(9999)
 
 
-@pytest.mark.parametrize(
-    "alertas, expected",
-    [
-        pytest.param(
-            [_alerta(4, "nutricional", "Alerta", "alta", reconhecido=None)],
-            [{"id": 4, "tipo": "nutricional", "descricao": "Alerta", "severidade": "alta", "reconhecido": False, "reconhecido_at": None}],
-            id="reconhecido-none-vira-false",
-        ),
-        pytest.param(
-            [_alerta(5, "nutricional", "Alerta com data", "media", reconhecido=True, reconhecido_at=datetime(2026, 4, 10, 12, 0, 0))],
-            [{"id": 5, "tipo": "nutricional", "descricao": "Alerta com data", "severidade": "media", "reconhecido": True, "reconhecido_at": "2026-04-10T12:00:00"}],
-            id="reconhecido-com-data-isoformat",
-        ),
-        pytest.param(
-            [_alerta(6, "nutricional", "Alerta", "alta")] * 100,
-            100,
-            id="retorna-100-alertas",
-            ),
-    ],
-)
 @patch("services.nutritional.nutritional_alert_service.nutritional_repository")
-def test_get_alertas_caminho_do_meio(mock_repo, alertas, expected):
-    """get_alertas: comportamentos intermediários"""
-    mock_repo.get_alertas.return_value = alertas
+def test_get_alerts_lista_vazia(mock_repo):
+    mock_repo.get_alertas.return_value = []
+    assert service.get_alerts.__wrapped__(9999) == []
+
+
+@patch("services.nutritional.nutritional_alert_service.nutritional_repository")
+def test_get_alerts_sev_gravada(mock_repo):
+    mock_repo.get_alertas.return_value = [
+        _alerta(1, "lab", "Albumina", "al"),
+        _alerta(2, "lab", "Fosforo", "al"),
+    ]
     result = service.get_alerts.__wrapped__(9999)
-    if isinstance(expected, int):
-        assert len(result) == expected
-    else:
-        assert result == expected
+    assert {r["sev"] for r in result} == {"al"}
+
+
+@patch("services.nutritional.nutritional_alert_service.nutritional_repository")
+def test_get_alerts_reconhecido_at_isoformat(mock_repo):
+    mock_repo.get_alertas.return_value = [
+        _alerta(
+            5,
+            "lab",
+            "Magnesio",
+            "cr",
+            reconhecido=True,
+            reconhecido_por=7,
+            reconhecido_at=datetime(2026, 4, 10, 12, 0, 0),
+        )
+    ]
+    result = service.get_alerts.__wrapped__(9999)
+    assert result[0]["reconhecido"] is True
+    assert result[0]["reconhecido_por"] == 7
+    assert result[0]["reconhecido_at"] == "2026-04-10T12:00:00"
+    assert result[0]["sev"] == "cr"
 
 
 @pytest.mark.parametrize(
     "exception",
-    [
-        pytest.param(Exception("Erro genérico"), id="excecao-generica"),
-        pytest.param(ConnectionError("Falha na conexão"), id="falha-conexao"),
-        pytest.param(ValueError("Valor inválido"), id="valor-invalido"),
-    ],
+    [Exception("generica"), ConnectionError("conexao"), ValueError("invalido")],
 )
 @patch("services.nutritional.nutritional_alert_service.nutritional_repository")
-def test_get_alertas_caminho_nao_feliz(mock_repo, exception):
-    """get_alertas: propaga exceção do repositório"""
+def test_get_alerts_propaga_excecao(mock_repo, exception):
     mock_repo.get_alertas.side_effect = exception
     with pytest.raises(type(exception)):
         service.get_alerts.__wrapped__(9999)
