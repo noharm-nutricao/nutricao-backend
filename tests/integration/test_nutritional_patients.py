@@ -37,6 +37,7 @@ REQUIRED_FIELDS = {
     "glim_fen",
     "glim_etiol",
     "inst",
+    "conduta",
     "haval",
     "d7",
     "pri",
@@ -619,7 +620,7 @@ def test_default_null_fields(client, analyst_headers):
     data = response.get_json()["data"]
 
     for patient in data:
-        assert patient["hist"] == []
+        assert isinstance(patient["hist"], list)
         assert isinstance(patient["glim_fen"], list)
         assert isinstance(patient["glim_etiol"], list)
         assert isinstance(patient["inst"], list)
@@ -841,14 +842,6 @@ def test_dieta_npo_null_this_us(client, analyst_headers):
     for patient in data:
         assert patient["dieta"] is None
         assert patient["npo"] is None
-
-
-def test_hist_empty_this_us(client, analyst_headers):
-    response = client.get(ENDPOINT, headers=analyst_headers)
-    data = response.get_json()["data"]
-
-    for patient in data:
-        assert patient["hist"] == []
 
 
 def test_inst_empty_this_us(client, analyst_headers):
@@ -1326,3 +1319,93 @@ def test_should_return_empty_list_when_patient_has_no_assessments(client, analys
 
     assert inner["total"] == 0
     assert inner["data"] == []
+
+def test_conduta_null_when_no_assessment(client, analyst_headers):
+    _delete_assessments(_ADM_LIST_ASSESSMENTS)
+
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    patient = _find_patient(response.get_json()["data"], _ADM_LIST_ASSESSMENTS)
+
+    assert patient is not None
+    assert patient["conduta"] is None
+    assert patient["hist"] == []
+
+def test_conduta_populated_with_single_assessment(client, analyst_headers):
+    _delete_assessments(_ADM_LIST_ASSESSMENTS)
+    _insert_assessment(_ADM_LIST_ASSESSMENTS, conduta="Dieta hipercalorica")
+
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    patient = _find_patient(response.get_json()["data"], _ADM_LIST_ASSESSMENTS)
+
+    assert patient is not None
+    assert patient["conduta"] == "Dieta hipercalorica"
+    assert len(patient["hist"]) == 1
+
+    _delete_assessments(_ADM_LIST_ASSESSMENTS)
+
+def test_hist_entry_structure(client, analyst_headers):
+    _delete_assessments(_ADM_LIST_ASSESSMENTS)
+    _insert_assessment(_ADM_LIST_ASSESSMENTS, conduta="Dieta hipercalorica")
+
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    patient = _find_patient(response.get_json()["data"], _ADM_LIST_ASSESSMENTS)
+
+    assert patient is not None
+    entry = patient["hist"][0]
+    assert set(entry.keys()) == {"h", "p", "c", "freq", "ing"}
+    assert entry["c"] == "Dieta hipercalorica"
+    assert entry["freq"] == "24h"
+
+    _delete_assessments(_ADM_LIST_ASSESSMENTS)
+
+def test_hist_ordered_most_recent_first(client, analyst_headers):
+    _delete_assessments(_ADM_LIST_ASSESSMENTS)
+    _insert_assessment(_ADM_LIST_ASSESSMENTS, conduta="Antiga", created_at="2024-01-01 10:00:00")
+    _insert_assessment(_ADM_LIST_ASSESSMENTS, conduta="Media",  created_at="2024-06-01 10:00:00")
+    _insert_assessment(_ADM_LIST_ASSESSMENTS, conduta="Nova",   created_at="2025-01-01 10:00:00")
+
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    patient = _find_patient(response.get_json()["data"], _ADM_LIST_ASSESSMENTS)
+
+    assert patient is not None
+    hist = patient["hist"]
+    assert len(hist) == 3
+    assert hist[0]["c"] == "Nova"
+    assert hist[1]["c"] == "Media"
+    assert hist[2]["c"] == "Antiga"
+
+    _delete_assessments(_ADM_LIST_ASSESSMENTS)
+
+
+def test_hist_max_10_entries(client, analyst_headers):
+    _delete_assessments(_ADM_LIST_ASSESSMENTS)
+    for i in range(15):
+        _insert_assessment(_ADM_LIST_ASSESSMENTS, conduta=f"Conduta {i}")
+
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    patient = _find_patient(response.get_json()["data"], _ADM_LIST_ASSESSMENTS)
+
+    assert patient is not None
+    assert len(patient["hist"]) == 10
+
+    _delete_assessments(_ADM_LIST_ASSESSMENTS)
+
+
+def test_conduta_persists_across_new_session(client):
+    _delete_assessments(_ADM_LIST_ASSESSMENTS)
+    _insert_assessment(_ADM_LIST_ASSESSMENTS, conduta="Dieta hipercalorica")
+
+    headers1 = make_headers(get_access(client, roles=[Role.PRESCRIPTION_ANALYST.value]))
+    r1 = client.get(ENDPOINT, headers=headers1)
+
+    headers2 = make_headers(get_access(client, roles=[Role.PRESCRIPTION_ANALYST.value]))
+    r2 = client.get(ENDPOINT, headers=headers2)
+
+    p1 = _find_patient(r1.get_json()["data"], _ADM_LIST_ASSESSMENTS)
+    p2 = _find_patient(r2.get_json()["data"], _ADM_LIST_ASSESSMENTS)
+
+    assert p1 is not None and p2 is not None
+    assert p1["conduta"] == p2["conduta"] == "Dieta hipercalorica"
+    assert p1["hist"] == p2["hist"]
+
+    _delete_assessments(_ADM_LIST_ASSESSMENTS)

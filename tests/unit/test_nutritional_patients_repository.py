@@ -36,6 +36,30 @@ def _make_last_assessment_builder():
     return grouped, subquery
 
 
+def _make_hist_inner_builder():
+    """Create a fluent mock for hist_inner subquery (ends with .subquery())."""
+    builder = MagicMock()
+    builder.select_from.return_value = builder
+    builder.outerjoin.return_value = builder
+    builder.filter.return_value = builder
+    builder.correlate.return_value = builder
+    builder.order_by.return_value = builder
+    builder.limit.return_value = builder
+
+    subquery = MagicMock()
+    subquery.c = MagicMock()
+    builder.subquery.return_value = subquery
+    return builder, subquery
+
+
+def _make_hist_agg_builder(scalar_result):
+    """Create a fluent mock for hist aggregation query (ends with .scalar_subquery())."""
+    builder = MagicMock()
+    builder.select_from.return_value = builder
+    builder.scalar_subquery.return_value = scalar_result
+    return builder
+
+
 def _make_main_query(rows):
     """Create a fluent mock for the main SELECT query chain."""
     main_query = MagicMock()
@@ -51,6 +75,7 @@ def _setup_session(monkeypatch, rows):
     """Patch repo.db.session with mocked query builders."""
     main_query = _make_main_query(rows)
     last_assessment_query, last_assessment_subquery = _make_last_assessment_builder()
+    hist_inner_query, _ = _make_hist_inner_builder()
 
     mocked_session = MagicMock()
     mocked_session.query.side_effect = [
@@ -65,6 +90,9 @@ def _setup_session(monkeypatch, rows):
         _make_subquery_builder(literal(None)),  # glim_etiol_subq
         _make_subquery_builder(literal(None)),  # nrs_data_subq
         _make_subquery_builder(literal(None)),  # mnutric_data_subq
+        _make_subquery_builder(literal(None)),  # conduta_subq
+        hist_inner_query,                        # hist_inner
+        _make_hist_agg_builder(literal(None)),   # hist_agg_subq
         main_query,
     ]
 
@@ -77,6 +105,7 @@ def _setup_session_with_sev_subq(monkeypatch, rows):
     main_query = _make_main_query(rows)
     last_assessment_query, last_assessment_subquery = _make_last_assessment_builder()
     sev_subq_builder = _make_subquery_builder(literal(None))
+    hist_inner_query, _ = _make_hist_inner_builder()
 
     mocked_session = MagicMock()
     mocked_session.query.side_effect = [
@@ -91,6 +120,9 @@ def _setup_session_with_sev_subq(monkeypatch, rows):
         _make_subquery_builder(literal(None)),  # glim_etiol_subq
         _make_subquery_builder(literal(None)),  # nrs_data_subq
         _make_subquery_builder(literal(None)),  # mnutric_data_subq
+        _make_subquery_builder(literal(None)),  # conduta_subq
+        hist_inner_query,                        # hist_inner
+        _make_hist_agg_builder(literal(None)),   # hist_agg_subq
         main_query,
     ]
 
@@ -123,7 +155,7 @@ def test_get_patients_without_optional_filters(monkeypatch):
     result = repo.get_patients()
 
     assert result == rows
-    assert mocked_session.query.call_count == 12
+    assert mocked_session.query.call_count == 15
     main_query.select_from.assert_called_once_with(Patient)
     assert main_query.outerjoin.call_count == 4
     assert main_query.filter.call_count == 1

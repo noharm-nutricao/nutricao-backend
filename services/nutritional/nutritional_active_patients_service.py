@@ -1,6 +1,7 @@
 """Service layer for GET /nutritional/patients endpoint."""
 
 from datetime import datetime, timezone
+
 import logging
 from decorators.has_permission_decorator import Permission, has_permission
 from models.enums import SegmentTypeEnum
@@ -97,13 +98,13 @@ def get_patients(request_data: NutritionalPatientsRequest):
                 "glim_fen": glim_fen,
                 "glim_etiol": glim_etiol,
                 "inst": [],  # from demo.nutricional_alerta - empty for now
-                # "conduta": row.conduta,
+                "conduta": row.conduta,
                 "haval": haval,
                 "d7": d7,
                 "pri": idx,  # position in the priority queue
                 "sev": sev,
                 "freq_horas": freq_horas,
-                "hist": [],  # empty in this US
+                "hist": row.hist if row.hist else [],
             }
         )
 

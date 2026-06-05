@@ -122,6 +122,8 @@ def test_get_patients_maps_icu_row_and_mnutric_payload(monkeypatch):
             "mn_apache_manual": True,
             "mn_sofa_manual": True,
         },
+        conduta=None,
+        hist=None,
     )
 
     captured = {}
@@ -209,6 +211,8 @@ def test_get_patients_maps_nrs_row_defaults_and_unknown_frequency(monkeypatch):
             "nrs_idade": 1,
         },
         mnutric_data=None,
+        conduta=None,
+        hist=None,
     )
 
     monkeypatch.setattr(service, "datetime", FrozenDateTime)

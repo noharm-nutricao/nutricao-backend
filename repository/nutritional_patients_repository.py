@@ -4,7 +4,7 @@ from sqlalchemy import case, extract, func, literal, or_, text
 
 from models.appendix import Department, SegmentDepartment
 from models.enums import SegmentTypeEnum
-from models.main import db
+from models.main import db, User
 from models.nutritional import (
     NutritionalAssessment,
     NutritionalScreening,
@@ -178,6 +178,46 @@ def get_patients(setor=None, ala=None):
         .scalar_subquery()
     ).label("mnutric_data")
 
+    conduta_subq = (
+        db.session.query(NutritionalAssessment.conduta)
+        .filter(NutritionalAssessment.nratendimento == Patient.admissionNumber)
+        .correlate(Patient)
+        .order_by(
+            NutritionalAssessment.created_at.desc(),
+            NutritionalAssessment.id.desc(),
+        )
+        .limit(1)
+        .scalar_subquery()
+    ).label("conduta")
+
+    hist_inner = (
+        db.session.query(
+            func.json_build_object(
+                "h", func.to_char(NutritionalAssessment.created_at, "DD/MM HH24:MI"),
+                "p", User.name,
+                "c", NutritionalAssessment.conduta,
+                "freq", NutritionalAssessment.frequencia,
+                "ing", NutritionalAssessment.ingestao,
+            ).label("item")
+        )
+        .select_from(NutritionalAssessment)
+        .outerjoin(User, User.id == NutritionalAssessment.idusuario)
+        .filter(NutritionalAssessment.nratendimento == Patient.admissionNumber)
+        .correlate(Patient)
+        .order_by(
+            NutritionalAssessment.created_at.desc(),
+            NutritionalAssessment.id.desc(),
+        )
+        .limit(10)
+        .subquery("hist_inner")
+    )
+
+    hist_agg_subq = (
+        db.session.query(func.json_agg(hist_inner.c.item))
+        .select_from(hist_inner)
+        .scalar_subquery()
+    ).label("hist")
+
     query = (
         db.session.query(
             Patient.admissionNumber.label("id"),
@@ -200,6 +240,8 @@ def get_patients(setor=None, ala=None):
             glim_etiol_subq,
             nrs_data_subq,
             mnutric_data_subq,
+            conduta_subq,
+            hist_agg_subq,
         )
         .select_from(Patient)
         .outerjoin(
