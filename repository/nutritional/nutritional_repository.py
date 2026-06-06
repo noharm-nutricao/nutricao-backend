@@ -12,6 +12,7 @@ from models.nutritional import (
     NutritionalGlim,
     NutritionalScreening,
 )
+from models.appendix import SegmentDepartment
 from models.prescription import Patient, Prescription, PrescriptionDrug
 from models.segment import Exams, SegmentExam
 from utils import status
@@ -471,7 +472,26 @@ def get_patient_segment_id(nratendimento: int):
         .order_by(Prescription.date.desc())
         .first()
     )
-    return row.idSegment if row else None
+    if row:
+        return row.idSegment
+
+    patient = (
+        db.session.query(Patient.idHospital, Patient.idDepartment)
+        .filter(Patient.admissionNumber == nratendimento)
+        .first()
+    )
+    if not patient or patient.idDepartment is None:
+        return None
+
+    seg = (
+        db.session.query(SegmentDepartment.id)
+        .filter(
+            SegmentDepartment.idHospital == patient.idHospital,
+            SegmentDepartment.idDepartment == patient.idDepartment,
+        )
+        .first()
+    )
+    return seg.id if seg else None
 
 
 def get_exam_limit(idsegmento, tpexame: str):

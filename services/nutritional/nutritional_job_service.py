@@ -20,6 +20,7 @@ from repository.nutritional import nutritional_repository
 from repository.nutritional.nutritional_nrs_repository import get_patient_department
 from services.nutritional import nutritional_nrs_service, nutritional_patient_service
 from services.nutritional.nutritional_clin_rx_service import nutritional_alert_engine
+from services.nutritional.nutritional_lab_alert_service import process_lab_pending_alerts
 from services.nutritional.nutritional_nrs_service import is_uti_wrapper
 
 logger = logging.getLogger("noharm.nutritional")
@@ -96,6 +97,7 @@ def _recalculate_schema(schema: str) -> tuple:
             # Campo 3 alerts — isolated so failures never revert NRS/mNUTRIC commit
             try:
                 nutritional_alert_engine()
+                process_lab_pending_alerts()
                 logger.info(
                     "Alertas Campo 3 processados nratendimento=%s schema=%s",
                     patient.nratendimento,
