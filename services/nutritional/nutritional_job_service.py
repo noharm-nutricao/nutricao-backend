@@ -23,6 +23,8 @@ from services.nutritional.nutritional_nrs_service import is_uti_wrapper
 
 logger = logging.getLogger("noharm.nutritional")
 
+_last_run: dict = {"at": None, "processed": 0, "errors": 0, "duration_ms": 0}
+
 
 def _get_active_schemas() -> list:
     """Return all distinct schemas with at least one active user.
@@ -124,6 +126,10 @@ def recalculate_nutritional_scores(app):
     Args:
         app: Flask application instance.
     """
+    global _last_run
+
+    start = time.monotonic()
+
     with app.app_context():
         schemas = _get_active_schemas()
         logger.info(
@@ -143,10 +149,20 @@ def recalculate_nutritional_scores(app):
                     "Erro inesperado no schema=%s: %s", schema, e, exc_info=True
                 )
 
+        duration_ms = round((time.monotonic() - start) * 1000)
+
+        _last_run = {
+            "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "processed": total_processed,
+            "errors": total_errors,
+            "duration_ms": duration_ms,
+        }
+
         logger.info(
-            "Recalculo concluido. Total processados: %d, Total erros: %d",
+            "Recalculo concluido. Total processados: %d, Total erros: %d, Duracao: %dms",
             total_processed,
             total_errors,
+            duration_ms,
         )
 
 

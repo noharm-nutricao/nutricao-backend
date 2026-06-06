@@ -6,10 +6,11 @@ from models.appendix import Department, SegmentDepartment
 from models.enums import SegmentTypeEnum
 from models.main import db, User
 from models.nutritional import (
+    NutritionalAlert,
     NutritionalAssessment,
-    NutritionalScreening,
     NutritionalD7,
     NutritionalGlim,
+    NutritionalScreening,
 )
 from models.prescription import Patient
 from models.segment import Segment
@@ -218,6 +219,31 @@ def get_patients(setor=None, ala=None):
         .scalar_subquery()
     ).label("hist")
 
+    inst_inner = (
+        db.session.query(
+            func.json_build_object(
+                "id", NutritionalAlert.id,
+                "t", NutritionalAlert.tipo,
+                "d", NutritionalAlert.descricao,
+                "sev", NutritionalAlert.severidade,
+                "al_ok", NutritionalAlert.reconhecido,
+            ).label("item")
+        )
+        .select_from(NutritionalAlert)
+        .filter(NutritionalAlert.nratendimento == Patient.admissionNumber)
+        .filter(NutritionalAlert.ativo == True)
+        .filter(NutritionalAlert.reconhecido == False)
+        .correlate(Patient)
+        .order_by(NutritionalAlert.created_at.desc())
+        .subquery("inst_inner")
+    )
+
+    inst_subq = (
+        db.session.query(func.json_agg(inst_inner.c.item))
+        .select_from(inst_inner)
+        .scalar_subquery()
+    ).label("inst")
+
     query = (
         db.session.query(
             Patient.admissionNumber.label("id"),
@@ -242,6 +268,7 @@ def get_patients(setor=None, ala=None):
             mnutric_data_subq,
             conduta_subq,
             hist_agg_subq,
+            inst_subq,
         )
         .select_from(Patient)
         .outerjoin(

@@ -41,4 +41,5 @@ def job_status():
     return {
         "scheduler": "running" if thread and thread.is_alive() else "stopped",
         "thread": thread.name if thread else None,
+        "last_run": nutritional_job_service._last_run,
     }
