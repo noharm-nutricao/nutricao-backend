@@ -6,10 +6,12 @@ from models.main import User
 from models.prescription import Patient
 from exception.validation_error import ValidationError
 from models.main import db
+from repository import nutritional_patients_repository
 from models.nutritional import NutritionalAssessment, NutritionalD7, NutritionalGlim
 from models.requests.nutritional_glim_request import diagnostico_to_api
 from repository.nutritional import nutritional_repository
 from security.permission import Permission
+from services.nutritional import nutritional_active_patients_service
 import logging
 
 from utils import status
@@ -361,14 +363,9 @@ def get_patients_by_nra(nratendimento: int):
     Busca pacientes pelo nratendimento filtrando na service.
     """
     try:
-        data = nutritional_repository.get_patients_repository()
-
-        # filtro
-        filtered = [
-            p for p in data if p["id"] == nratendimento
-        ]
-
-        return filtered
+        rows = nutritional_patients_repository.get_patients()
+        data = nutritional_active_patients_service.build_patients_payload(rows=rows)
+        return [p for p in data if p["id"] == nratendimento]
 
     except Exception as e:
         logging.error(f"Erro ao buscar pacientes no repositório: {str(e)}")

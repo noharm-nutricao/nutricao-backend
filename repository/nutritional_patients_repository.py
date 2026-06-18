@@ -147,6 +147,9 @@ def get_patients(setor=None, ala=None):
                 "nrs_nut", NutritionalScreening.nrs_nut,
                 "nrs_doenca", NutritionalScreening.nrs_doenca,
                 "nrs_idade", NutritionalScreening.nrs_idade,
+                "nrs_completo", NutritionalScreening.nrs_completo,
+                "calculado_at", NutritionalScreening.calculado_at,
+                "created_at", NutritionalScreening.created_at,
             )
         )
         .filter(NutritionalScreening.nratendimento == Patient.admissionNumber)

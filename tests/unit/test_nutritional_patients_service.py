@@ -160,6 +160,9 @@ def test_get_patients_maps_icu_row_and_mnutric_payload(monkeypatch):
     assert patient["glim_fen"] == []
     assert patient["glim_etiol"] == []
     assert patient["pri"] == 1
+    assert patient["data_internacao"] == "2026-04-08T00:00:00"
+    assert patient["triagem_at"] is None
+    assert patient["triagem_status"] == "atrasada"
     assert patient["campo1"] == {
         "mnutric_total": 6,
         "mn_dims": {
@@ -238,6 +241,9 @@ def test_get_patients_maps_nrs_row_defaults_and_unknown_frequency(monkeypatch):
     assert patient["glim_diag"] == "moderada"
     assert patient["glim_fen"] == ["perda_peso"]
     assert patient["glim_etiol"] == ["inflamacao"]
+    assert patient["data_internacao"] is None
+    assert patient["triagem_at"] is None
+    assert patient["triagem_status"] == "pendente"
     assert patient["campo1"] == {
         "nrs_total": 4,
         "nrs_dims": {
@@ -246,6 +252,30 @@ def test_get_patients_maps_nrs_row_defaults_and_unknown_frequency(monkeypatch):
             "idade": 1,
         },
     }
+
+
+def test_calc_triagem_status_pendente_lt_24h():
+    now = datetime(2026, 4, 10, 12, 0, tzinfo=timezone.utc)
+    admission = datetime(2026, 4, 10, 1, 0, tzinfo=timezone.utc)
+    assert service._calc_triagem_status(admission, False, False, now) == "pendente"
+
+
+def test_calc_triagem_status_atrasada_gt_24h():
+    now = datetime(2026, 4, 10, 12, 0, tzinfo=timezone.utc)
+    admission = datetime(2026, 4, 9, 10, 59, tzinfo=timezone.utc)
+    assert service._calc_triagem_status(admission, False, False, now) == "atrasada"
+
+
+def test_calc_triagem_status_em_andamento_has_priority_over_time():
+    now = datetime(2026, 4, 10, 12, 0, tzinfo=timezone.utc)
+    admission = datetime(2026, 4, 1, 8, 0, tzinfo=timezone.utc)
+    assert service._calc_triagem_status(admission, False, True, now) == "em_andamento"
+
+
+def test_calc_triagem_status_finalizada_has_priority():
+    now = datetime(2026, 4, 10, 12, 0, tzinfo=timezone.utc)
+    admission = datetime(2026, 4, 1, 8, 0, tzinfo=timezone.utc)
+    assert service._calc_triagem_status(admission, True, True, now) == "finalizada"
 
 
 def test_build_campo1_returns_nrs_for_nrs_protocol():
