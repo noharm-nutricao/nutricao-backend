@@ -122,6 +122,7 @@ def test_get_patients_maps_icu_row_and_mnutric_payload(monkeypatch):
             "mn_apache_manual": True,
             "mn_sofa_manual": True,
         },
+        triagem_finalizada_at=datetime(2026, 4, 9, 10, 0),
         conduta=None,
         hist=None,
     )
@@ -138,6 +139,11 @@ def test_get_patients_maps_icu_row_and_mnutric_payload(monkeypatch):
         service.nutritional_patients_repository,
         "get_patients",
         fake_get_patients,
+    )
+    monkeypatch.setattr(
+        service.nutritional_repository,
+        "get_active_lab_alerts",
+        lambda nratendimento: [],
     )
 
     request_data = NutritionalPatientsRequest(setor=7, ala="UTI")
@@ -161,8 +167,8 @@ def test_get_patients_maps_icu_row_and_mnutric_payload(monkeypatch):
     assert patient["glim_etiol"] == []
     assert patient["pri"] == 1
     assert patient["data_internacao"] == "2026-04-08T00:00:00"
-    assert patient["triagem_at"] is None
-    assert patient["triagem_status"] == "atrasada"
+    assert patient["triagem_at"] == "2026-04-09T10:00:00"
+    assert patient["triagem_status"] == "finalizada"
     assert patient["campo1"] == {
         "mnutric_total": 6,
         "mn_dims": {
@@ -214,6 +220,7 @@ def test_get_patients_maps_nrs_row_defaults_and_unknown_frequency(monkeypatch):
             "nrs_idade": 1,
         },
         mnutric_data=None,
+        triagem_finalizada_at=None,
         conduta=None,
         hist=None,
     )
@@ -223,6 +230,11 @@ def test_get_patients_maps_nrs_row_defaults_and_unknown_frequency(monkeypatch):
         service.nutritional_patients_repository,
         "get_patients",
         lambda *, setor, ala: [row],
+    )
+    monkeypatch.setattr(
+        service.nutritional_repository,
+        "get_active_lab_alerts",
+        lambda nratendimento: [],
     )
 
     request_data = NutritionalPatientsRequest()
@@ -276,6 +288,12 @@ def test_calc_triagem_status_finalizada_has_priority():
     now = datetime(2026, 4, 10, 12, 0, tzinfo=timezone.utc)
     admission = datetime(2026, 4, 1, 8, 0, tzinfo=timezone.utc)
     assert service._calc_triagem_status(admission, True, True, now) == "finalizada"
+
+
+def test_calc_triagem_status_finalizada_when_only_mnutric_complete():
+    now = datetime(2026, 4, 10, 12, 0, tzinfo=timezone.utc)
+    admission = datetime(2026, 4, 9, 23, 0, tzinfo=timezone.utc)
+    assert service._calc_triagem_status(admission, True, False, now) == "finalizada"
 
 
 def test_build_campo1_returns_nrs_for_nrs_protocol():

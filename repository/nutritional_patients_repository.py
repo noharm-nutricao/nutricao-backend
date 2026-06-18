@@ -1,6 +1,6 @@
 """Repository for nutritional patients listing query."""
 
-from sqlalchemy import case, extract, func, literal, or_, text
+from sqlalchemy import and_, case, extract, func, literal, or_, text
 
 from models.appendix import Department, SegmentDepartment
 from models.enums import SegmentTypeEnum
@@ -147,9 +147,6 @@ def get_patients(setor=None, ala=None):
                 "nrs_nut", NutritionalScreening.nrs_nut,
                 "nrs_doenca", NutritionalScreening.nrs_doenca,
                 "nrs_idade", NutritionalScreening.nrs_idade,
-                "nrs_completo", NutritionalScreening.nrs_completo,
-                "calculado_at", NutritionalScreening.calculado_at,
-                "created_at", NutritionalScreening.created_at,
             )
         )
         .filter(NutritionalScreening.nratendimento == Patient.admissionNumber)
@@ -181,6 +178,34 @@ def get_patients(setor=None, ala=None):
         .limit(1)
         .scalar_subquery()
     ).label("mnutric_data")
+
+    # triagem_at — first completion timestamp across NRS2002 and mNUTRIC
+    triagem_at_subq = (
+        db.session.query(
+            func.min(
+                func.coalesce(
+                    NutritionalScreening.calculado_at,
+                    NutritionalScreening.created_at,
+                )
+            )
+        )
+        .filter(NutritionalScreening.nratendimento == Patient.admissionNumber)
+        .filter(
+            or_(
+                and_(
+                    NutritionalScreening.protocolo == "NRS2002",
+                    NutritionalScreening.nrs_completo.is_(True),
+                ),
+                and_(
+                    NutritionalScreening.protocolo == "MNUTRIC",
+                    NutritionalScreening.mn_apache_manual.is_(True),
+                    NutritionalScreening.mn_sofa_manual.is_(True),
+                ),
+            )
+        )
+        .correlate(Patient)
+        .scalar_subquery()
+    ).label("triagem_finalizada_at")
 
     conduta_subq = (
         db.session.query(NutritionalAssessment.conduta)
@@ -269,6 +294,7 @@ def get_patients(setor=None, ala=None):
             glim_etiol_subq,
             nrs_data_subq,
             mnutric_data_subq,
+            triagem_at_subq,
             conduta_subq,
             hist_agg_subq,
             inst_subq,

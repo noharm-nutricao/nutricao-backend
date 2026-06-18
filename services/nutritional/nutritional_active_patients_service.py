@@ -17,8 +17,8 @@ def _to_iso_datetime(value):
     return value.isoformat()
 
 
-def _calc_triagem_status(data_internacao, nrs_completo, dados_incompletos, now):
-    if nrs_completo:
+def _calc_triagem_status(data_internacao, finalizada, dados_incompletos, now):
+    if finalizada:
         return "finalizada"
     if dados_incompletos:
         return "em_andamento"
@@ -71,13 +71,9 @@ def build_patients_payload(rows, now=None):
         glim_etiol = row.glim_etiol if row.glim_etiol else []
 
         campo1 = _build_campo1(protocolo, row)
-        nrs_completo = bool(row.nrs_data and row.nrs_data.get("nrs_completo"))
         dados_incompletos = bool(campo1 and campo1.get("dados_incompletos"))
-        triagem_at = None
-        if nrs_completo and row.nrs_data:
-            triagem_at = _to_iso_datetime(
-                row.nrs_data.get("calculado_at") or row.nrs_data.get("created_at")
-            )
+        finalizada = row.triagem_finalizada_at is not None
+        triagem_at = _to_iso_datetime(row.triagem_finalizada_at)
 
         patients.append(
             {
@@ -111,7 +107,7 @@ def build_patients_payload(rows, now=None):
                 "triagem_at": triagem_at,
                 "triagem_status": _calc_triagem_status(
                     data_internacao=row.dtinternacao,
-                    nrs_completo=nrs_completo,
+                    finalizada=finalizada,
                     dados_incompletos=dados_incompletos,
                     now=now,
                 ),

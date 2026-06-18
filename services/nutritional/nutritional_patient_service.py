@@ -358,6 +358,7 @@ def get_glim(nratendimento: int):
     return _glim_to_dict(glim)
 
 
+@has_permission(Permission.READ_PRESCRIPTION)
 def get_patients_by_nra(nratendimento: int):
     """
     Busca pacientes pelo nratendimento filtrando na service.

@@ -20,6 +20,8 @@ _ADM_TRIAGEM_PENDENTE = 900005
 _ADM_TRIAGEM_ATRASADA = 900006
 _ADM_TRIAGEM_ANDAMENTO = 900007
 _ADM_TRIAGEM_FINALIZADA = 900008
+_ADM_TRIAGEM_FINALIZADA_MNUTRIC = 900009
+_ADM_TRIAGEM_PRIMEIRO = 900010
 
 REQUIRED_FIELDS = {
     "id",
@@ -170,6 +172,7 @@ def _ensure_schema():
         "mn_total INTEGER",
         "mn_apache_manual BOOLEAN",
         "mn_sofa_manual BOOLEAN",
+        "calculado_at TIMESTAMP",
     ]
     for column in triagem_columns:
         session.execute(
@@ -405,6 +408,64 @@ def _seed():
     )
     session.execute(
         text(
+            "INSERT INTO demo.pessoa "
+            "(fkpessoa, fkhospital, nratendimento, dtinternacao, dtnascimento, "
+            " sexo, peso, altura, fksetor, leito) "
+            "VALUES (:pk, :hosp, :adm, NOW() - INTERVAL '10 hours', '1972-09-09', "
+            " 'M', 80.0, 178.0, :setor, 'UTI-07')"
+        ),
+        {
+            "pk": _ADM_TRIAGEM_FINALIZADA_MNUTRIC,
+            "hosp": _HOSPITAL,
+            "adm": _ADM_TRIAGEM_FINALIZADA_MNUTRIC,
+            "setor": _SETOR_UTI,
+        },
+    )
+    session.execute(
+        text(
+            "INSERT INTO demo.nutricional_triagem "
+            "(nratendimento, protocolo, classificacao, mn_idade, mn_apache, mn_sofa, "
+            " mn_comor, mn_dias, mn_total, mn_apache_manual, mn_sofa_manual, calculado_at, created_at) "
+            "VALUES (:adm, 'MNUTRIC', 'al', 2, 1, 1, 1, 1, 6, true, true, "
+            " NOW() - INTERVAL '1 hour', NOW() - INTERVAL '3 hours')"
+        ),
+        {"adm": _ADM_TRIAGEM_FINALIZADA_MNUTRIC},
+    )
+    session.execute(
+        text(
+            "INSERT INTO demo.pessoa "
+            "(fkpessoa, fkhospital, nratendimento, dtinternacao, dtnascimento, "
+            " sexo, peso, altura, fksetor, leito) "
+            "VALUES (:pk, :hosp, :adm, '2026-06-09 08:00:00', '1969-02-02', "
+            " 'F', 64.0, 162.0, :setor, 'ENF-24')"
+        ),
+        {
+            "pk": _ADM_TRIAGEM_PRIMEIRO,
+            "hosp": _HOSPITAL,
+            "adm": _ADM_TRIAGEM_PRIMEIRO,
+            "setor": _SETOR_ENF,
+        },
+    )
+    session.execute(
+        text(
+            "INSERT INTO demo.nutricional_triagem "
+            "(nratendimento, protocolo, classificacao, nrs_nut, nrs_doenca, nrs_idade, nrs_total, nrs_completo, calculado_at, created_at) "
+            "VALUES (:adm, 'NRS2002', 'al', 2, 1, 1, 4, true, '2026-06-10 08:00:00', '2026-06-10 08:00:00')"
+        ),
+        {"adm": _ADM_TRIAGEM_PRIMEIRO},
+    )
+    session.execute(
+        text(
+            "INSERT INTO demo.nutricional_triagem "
+            "(nratendimento, protocolo, classificacao, mn_idade, mn_apache, mn_sofa, "
+            " mn_comor, mn_dias, mn_total, mn_apache_manual, mn_sofa_manual, calculado_at, created_at) "
+            "VALUES (:adm, 'MNUTRIC', 'al', 2, 1, 1, 1, 1, 6, true, true, "
+            " '2026-06-10 14:00:00', '2026-06-10 14:00:00')"
+        ),
+        {"adm": _ADM_TRIAGEM_PRIMEIRO},
+    )
+    session.execute(
+        text(
             "INSERT INTO demo.nutricional_glim "
             "(nratendimento, diagnostico, fenotipos, etiologias, created_at, idusuario) "
             "VALUES (:adm, 'mod', ARRAY['perda_peso', 'baixo_imc'], ARRAY['inflamacao'], NOW(), 1)"
@@ -425,6 +486,8 @@ def _cleanup():
         _ADM_TRIAGEM_ATRASADA,
         _ADM_TRIAGEM_ANDAMENTO,
         _ADM_TRIAGEM_FINALIZADA,
+        _ADM_TRIAGEM_FINALIZADA_MNUTRIC,
+        _ADM_TRIAGEM_PRIMEIRO,
         900090,
     ]
     for adm in _test_adms:
@@ -575,14 +638,39 @@ def test_triagem_status_finalizada_when_nrs_completo(client, analyst_headers):
     assert isinstance(datetime.fromisoformat(patient["triagem_at"]), datetime)
 
 
+def test_triagem_status_finalizada_when_mnutric_completo(client, analyst_headers):
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    data = response.get_json()["data"]
+
+    patient = _find_patient(data, _ADM_TRIAGEM_FINALIZADA_MNUTRIC)
+    assert patient is not None
+    assert patient["triagem_status"] == "finalizada"
+    assert patient["triagem_at"] is not None
+    assert isinstance(datetime.fromisoformat(patient["triagem_at"]), datetime)
+
+
+def test_triagem_at_uses_first_completed_record(client, analyst_headers):
+    response = client.get(ENDPOINT, headers=analyst_headers)
+    data = response.get_json()["data"]
+
+    patient = _find_patient(data, _ADM_TRIAGEM_PRIMEIRO)
+    assert patient is not None
+    assert patient["triagem_status"] == "finalizada"
+    # Duas triagens completas (08:00 NRS, 14:00 mNUTRIC) -> deve retornar a primeira
+    parsed = datetime.fromisoformat(patient["triagem_at"]).replace(tzinfo=None)
+    assert parsed == datetime(2026, 6, 10, 8, 0, 0)
+
+
 def test_detail_endpoint_contains_triagem_fields(client, analyst_headers):
     response = client.get(f"{ENDPOINT}/{_ADM_TRIAGEM_FINALIZADA}", headers=analyst_headers)
 
     assert response.status_code == 200
     body = response.get_json()
-    assert isinstance(body, list)
-    assert len(body) == 1
-    patient = body[0]
+    assert body["status"] == "success"
+    data = body["data"]
+    assert isinstance(data, list)
+    assert len(data) == 1
+    patient = data[0]
     assert "data_internacao" in patient
     assert "triagem_at" in patient
     assert "triagem_status" in patient
