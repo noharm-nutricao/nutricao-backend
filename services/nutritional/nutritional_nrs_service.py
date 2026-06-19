@@ -202,9 +202,8 @@ def __recalculate_nrs(
         triagem,
         nrs_score_dto,
     )
-    return None
+    return nrs_score_dto
 
 
-def recalculate_nrs(patient: Patient, is_icu: bool) -> None:
-    __recalculate_nrs(patient, is_icu)
-    return None
+def recalculate_nrs(patient: Patient, is_icu: bool) -> NrsScoreDTO:
+    return __recalculate_nrs(patient, is_icu)

@@ -48,6 +48,7 @@ class NutritionalScreening(db.Model):
     mn_sofa_manual = db.Column("mn_sofa_manual", db.Boolean, nullable=True)
 
     classificacao = db.Column("classificacao", db.String, nullable=True)
+    triagem_at = db.Column("triagem_at", db.DateTime, nullable=True)
     calculado_at = db.Column("calculado_at", db.DateTime, nullable=True)
     created_at = db.Column("created_at", db.DateTime, nullable=True)
     updated_at = db.Column("updated_at", db.DateTime, nullable=True, onupdate=func.now())

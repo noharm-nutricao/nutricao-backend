@@ -1,5 +1,5 @@
 from decorators.has_permission_decorator import has_permission
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from models.main import User
@@ -9,6 +9,7 @@ from models.main import db
 from models.nutritional import NutritionalAssessment, NutritionalD7, NutritionalGlim
 from models.requests.nutritional_glim_request import diagnostico_to_api
 from repository.nutritional import nutritional_repository
+from repository.nutritional.nutritional_nrs_repository import get_or_create_triagem
 from security.permission import Permission
 import logging
 
@@ -397,6 +398,15 @@ def create_assessment(nratendimento: int, data, idusuario: int):
     )
 
     nutritional_repository.create_assessment(assessment)
+
+    triagem = get_or_create_triagem(nratendimento)
+    if triagem.nrs_completo and not triagem.triagem_at:
+        triagem.triagem_at = datetime.now(timezone.utc)
+        db.session.flush()
+        logging.info(
+            "Triagem finalizada via save manual nratendimento=%s",
+            nratendimento,
+        )
 
     # Se prox_visita = D7, encerra D7 ativo e cria novo
     _handle_d7_closure(

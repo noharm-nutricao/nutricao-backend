@@ -12,12 +12,13 @@ import logging
 import os
 import threading
 import time
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 from config import Config
 from models.main import User, db, dbSession
 from repository.nutritional import nutritional_repository
-from repository.nutritional.nutritional_nrs_repository import get_patient_department
+from repository.nutritional.nutritional_nrs_repository import get_or_create_triagem, get_patient_department
 from services.nutritional import nutritional_nrs_service, nutritional_patient_service
 from services.nutritional.nutritional_clin_rx_service import nutritional_alert_engine
 from services.nutritional.nutritional_lab_alert_service import process_lab_pending_alerts
@@ -89,12 +90,29 @@ def _recalculate_schema(schema: str) -> tuple:
                     schema,
                 )
 
-            nutritional_nrs_service.recalculate_nrs(patient_ns, is_icu=patient_is_icu)
-            logger.info(
-                "NRS-2002 recalculado nratendimento=%s schema=%s",
-                patient.nratendimento,
-                schema,
-            )
+            result_nrs = nutritional_nrs_service.recalculate_nrs(patient_ns, is_icu=patient_is_icu)
+
+            if result_nrs and result_nrs.nrs_completo:
+                triagem = get_or_create_triagem(patient.nratendimento)
+                if not triagem.triagem_at:
+                    triagem.triagem_at = datetime.now(timezone.utc)
+                    logger.info(
+                        "Triagem finalizada nratendimento=%s schema=%s",
+                        patient.nratendimento,
+                        schema,
+                    )
+                else:
+                    logger.info(
+                        "Monitoramento nratendimento=%s schema=%s",
+                        patient.nratendimento,
+                        schema,
+                    )
+            else:
+                logger.info(
+                    "NRS incompleto nratendimento=%s schema=%s",
+                    patient.nratendimento,
+                    schema,
+                )
 
             # Campo 3 alerts — isolated so failures never revert NRS/mNUTRIC commit
             try:
