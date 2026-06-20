@@ -15,9 +15,9 @@ FOSFORO_MAGNESIO = {"P", "MG"}
 def is_exame_alterado(tpexame, resultado, min_val, max_val) -> bool:
     if resultado is None:
         return False
-    if EXAMES.get(tpexame.upper(), {}).get("dir") == "high":
-        return max_val is not None and resultado > max_val
-    return min_val is not None and resultado < min_val
+    below = min_val is not None and resultado < min_val
+    above = max_val is not None and resultado > max_val
+    return below or above
 
 
 def resolver_severidade(qtd_alterados, tem_fosforo_ou_magnesio, em_ne_npt_pos_npo):
