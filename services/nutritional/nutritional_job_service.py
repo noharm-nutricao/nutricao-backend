@@ -19,6 +19,7 @@ from models.main import User, db, dbSession
 from repository.nutritional import nutritional_repository
 from repository.nutritional.nutritional_nrs_repository import get_patient_department
 from services.nutritional import nutritional_nrs_service, nutritional_patient_service
+from services.nutritional.nutritional_clin_rx_service import nutritional_alert_engine
 from services.nutritional.nutritional_nrs_service import is_uti_wrapper
 
 logger = logging.getLogger("noharm.nutritional")
@@ -91,6 +92,22 @@ def _recalculate_schema(schema: str) -> tuple:
                 patient.nratendimento,
                 schema,
             )
+
+            # Campo 3 alerts — isolated so failures never revert NRS/mNUTRIC commit
+            try:
+                nutritional_alert_engine()
+                logger.info(
+                    "Alertas Campo 3 processados nratendimento=%s schema=%s",
+                    patient.nratendimento,
+                    schema,
+                )
+            except Exception as trigger_err:
+                logger.warning(
+                    "Falha alertas nratendimento=%s schema=%s: %s",
+                    patient.nratendimento,
+                    schema,
+                    trigger_err,
+                )
 
             db.session.commit()
             processed += 1
