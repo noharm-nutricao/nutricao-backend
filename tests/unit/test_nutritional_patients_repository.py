@@ -76,6 +76,7 @@ def _setup_session(monkeypatch, rows):
     main_query = _make_main_query(rows)
     last_assessment_query, last_assessment_subquery = _make_last_assessment_builder()
     hist_inner_query, _ = _make_hist_inner_builder()
+    inst_inner_query, _ = _make_hist_inner_builder()
 
     mocked_session = MagicMock()
     mocked_session.query.side_effect = [
@@ -93,6 +94,8 @@ def _setup_session(monkeypatch, rows):
         _make_subquery_builder(literal(None)),  # conduta_subq
         hist_inner_query,                        # hist_inner
         _make_hist_agg_builder(literal(None)),   # hist_agg_subq
+        inst_inner_query,                        # inst_inner
+        _make_hist_agg_builder(literal(None)),   # inst_agg_subq
         main_query,
     ]
 
@@ -106,6 +109,7 @@ def _setup_session_with_sev_subq(monkeypatch, rows):
     last_assessment_query, last_assessment_subquery = _make_last_assessment_builder()
     sev_subq_builder = _make_subquery_builder(literal(None))
     hist_inner_query, _ = _make_hist_inner_builder()
+    inst_inner_query, _ = _make_hist_inner_builder()
 
     mocked_session = MagicMock()
     mocked_session.query.side_effect = [
@@ -123,6 +127,8 @@ def _setup_session_with_sev_subq(monkeypatch, rows):
         _make_subquery_builder(literal(None)),  # conduta_subq
         hist_inner_query,                        # hist_inner
         _make_hist_agg_builder(literal(None)),   # hist_agg_subq
+        inst_inner_query,                        # inst_inner
+        _make_hist_agg_builder(literal(None)),   # inst_agg_subq
         main_query,
     ]
 
@@ -155,7 +161,7 @@ def test_get_patients_without_optional_filters(monkeypatch):
     result = repo.get_patients()
 
     assert result == rows
-    assert mocked_session.query.call_count == 15
+    assert mocked_session.query.call_count == 17
     main_query.select_from.assert_called_once_with(Patient)
     assert main_query.outerjoin.call_count == 4
     assert main_query.filter.call_count == 1

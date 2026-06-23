@@ -111,7 +111,7 @@ def _insert_alert(alert_id, ativo, reconhecido):
             "adm": _ADM,
             "tipo": "lab",
             "descricao": "NPO",
-            "severidade": "amarelo",
+            "severidade": "al",
             "ativo": ativo,
             "reconhecido": reconhecido,
             "reconhecido_por": _get_user_id(),

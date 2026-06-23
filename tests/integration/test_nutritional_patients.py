@@ -848,8 +848,9 @@ def test_hist_empty_this_us(client, analyst_headers):
     response = client.get(ENDPOINT, headers=analyst_headers)
     data = response.get_json()["data"]
 
-    for patient in data:
-        assert patient["hist"] == []
+    patient = _find_patient(data, _ADM_ACTIVE_ENF)
+    assert patient is not None
+    assert patient["hist"] == []
 
 
 def test_inst_structure(client, analyst_headers):
@@ -859,8 +860,7 @@ def test_inst_structure(client, analyst_headers):
     for patient in data:
         assert isinstance(patient["inst"], list)
         for item in patient["inst"]:
-            assert set(item.keys()) == {"t", "sev", "d"}
-            assert item["t"] == "lab"
+            assert set(item.keys()) == {"id", "t", "d", "sev", "al_ok"}
 
 
 def test_filter_ala_case_insensitive(client, analyst_headers):

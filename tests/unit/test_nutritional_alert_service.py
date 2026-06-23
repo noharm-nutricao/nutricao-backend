@@ -46,12 +46,10 @@ def test_get_alerts_mapeia_contrato_completo(mock_repo):
     assert result == [
         {
             "id": 1,
-            "tipo": "clin",
+            "t": "clin",
             "sev": "md",
-            "descricao": "Baixa ingestao",
-            "ativo": True,
-            "reconhecido": False,
-            "reconhecido_por": None,
+            "d": "Baixa ingestao",
+            "al_ok": False,
             "reconhecido_at": None,
             "created_at": "2026-05-20T08:14:00",
         }
@@ -89,8 +87,7 @@ def test_get_alerts_reconhecido_at_isoformat(mock_repo):
         )
     ]
     result = service.get_alerts.__wrapped__(9999)
-    assert result[0]["reconhecido"] is True
-    assert result[0]["reconhecido_por"] == 7
+    assert result[0]["al_ok"] is True
     assert result[0]["reconhecido_at"] == "2026-04-10T12:00:00"
     assert result[0]["sev"] == "cr"
 
