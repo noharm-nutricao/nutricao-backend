@@ -1,5 +1,6 @@
 from datetime import datetime
 import re
+
 from typing import Any, Callable, Optional
 import unicodedata
 from models.enums import SegmentTypeEnum
