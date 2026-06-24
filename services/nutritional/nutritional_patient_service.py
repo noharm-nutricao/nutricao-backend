@@ -309,7 +309,10 @@ def save_glim(nratendimento: int, data, idusuario: int):
     if not patient:
         raise ValidationError("Paciente não encontrado", "errors.notFound", status.HTTP_404_NOT_FOUND)
 
-    _validate_glim_required(data)
+    has_malnutrition = data.diagnostico_db != "nd"
+
+    if has_malnutrition:
+        _validate_glim_required(data)
 
     glim = nutritional_repository.upsert_glim(
         nratendimento=nratendimento,
@@ -322,7 +325,7 @@ def save_glim(nratendimento: int, data, idusuario: int):
 
     d7 = None
     d7_criado = False
-    if data.diagnostico_db != "nd":
+    if has_malnutrition:
         d7 = nutritional_repository.upsert_d7(
             nratendimento=nratendimento,
             idusuario=idusuario,
