@@ -71,10 +71,8 @@ class TestRecalculateNutritionalScores:
             return_value={"total": 5},
         ) as mock_mnutric, patch(
             "services.nutritional.nutritional_job_service.nutritional_nrs_service.recalculate_nrs",
-            return_value=_make_nrs_dto(nrs_completo=False),
+            return_value=(_make_nrs_dto(nrs_completo=False), None),
         ) as mock_nrs, patch(
-            "services.nutritional.nutritional_job_service.get_or_create_triagem",
-        ), patch(
             "services.nutritional.nutritional_job_service.db.session.commit",
         ) as mock_commit:
             job_service.recalculate_nutritional_scores(flask_app)
@@ -107,6 +105,7 @@ class TestRecalculateNutritionalScores:
             side_effect=ValueError("Simulated error"),
         ), patch(
             "services.nutritional.nutritional_job_service.nutritional_nrs_service.recalculate_nrs",
+            return_value=(_make_nrs_dto(nrs_completo=False), None),
         ), patch(
             "services.nutritional.nutritional_job_service.db.session.commit",
         ), patch(
@@ -136,9 +135,7 @@ class TestRecalculateNutritionalScores:
             return_value=None,
         ), patch(
             "services.nutritional.nutritional_job_service.nutritional_nrs_service.recalculate_nrs",
-            return_value=_make_nrs_dto(nrs_completo=False),
-        ), patch(
-            "services.nutritional.nutritional_job_service.get_or_create_triagem",
+            return_value=(_make_nrs_dto(nrs_completo=False), None),
         ), patch(
             "services.nutritional.nutritional_job_service.db.session.commit",
         ) as mock_commit, patch.object(job_service.logger, "error") as mock_error:
@@ -165,9 +162,7 @@ class TestRecalculateNutritionalScores:
             return_value={"total": 5},
         ), patch(
             "services.nutritional.nutritional_job_service.nutritional_nrs_service.recalculate_nrs",
-            return_value=_make_nrs_dto(nrs_completo=False),
-        ), patch(
-            "services.nutritional.nutritional_job_service.get_or_create_triagem",
+            return_value=(_make_nrs_dto(nrs_completo=False), None),
         ), patch(
             "services.nutritional.nutritional_job_service.db.session.commit",
         ), patch.object(job_service.logger, "info") as mock_info:
@@ -278,10 +273,7 @@ class TestTriagemAt:
                 return_value={"total": 5},
             ), patch(
                 "services.nutritional.nutritional_job_service.nutritional_nrs_service.recalculate_nrs",
-                return_value=_make_nrs_dto(nrs_completo=nrs_completo),
-            ), patch(
-                "services.nutritional.nutritional_job_service.get_or_create_triagem",
-                return_value=triagem_mock,
+                return_value=(_make_nrs_dto(nrs_completo=nrs_completo), triagem_mock),
             ), patch(
                 "services.nutritional.nutritional_job_service.db.session.commit",
             ):
