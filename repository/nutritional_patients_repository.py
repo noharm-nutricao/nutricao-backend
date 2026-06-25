@@ -1,6 +1,6 @@
 """Repository for nutritional patients listing query."""
 
-from sqlalchemy import and_, case, extract, func, literal, or_, text
+from sqlalchemy import case, extract, func, literal, or_, text
 
 from models.appendix import Department, SegmentDepartment
 from models.enums import SegmentTypeEnum
@@ -179,30 +179,13 @@ def get_patients(setor=None, ala=None):
         .scalar_subquery()
     ).label("mnutric_data")
 
-    # triagem_at — first completion timestamp across NRS2002 and mNUTRIC
+    # triagem_at — first finalization timestamp stamped by the triage job (US-BE-25).
+    # The dedicated column is the single source of truth; the listing must read it
+    # instead of recomputing from calculado_at/created_at.
     triagem_at_subq = (
-        db.session.query(
-            func.min(
-                func.coalesce(
-                    NutritionalScreening.calculado_at,
-                    NutritionalScreening.created_at,
-                )
-            )
-        )
+        db.session.query(func.min(NutritionalScreening.triagem_at))
         .filter(NutritionalScreening.nratendimento == Patient.admissionNumber)
-        .filter(
-            or_(
-                and_(
-                    NutritionalScreening.protocolo == "NRS2002",
-                    NutritionalScreening.nrs_completo.is_(True),
-                ),
-                and_(
-                    NutritionalScreening.protocolo == "MNUTRIC",
-                    NutritionalScreening.mn_apache_manual.is_(True),
-                    NutritionalScreening.mn_sofa_manual.is_(True),
-                ),
-            )
-        )
+        .filter(NutritionalScreening.triagem_at.isnot(None))
         .correlate(Patient)
         .scalar_subquery()
     ).label("triagem_finalizada_at")
