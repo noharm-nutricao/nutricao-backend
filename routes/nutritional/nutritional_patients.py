@@ -59,7 +59,7 @@ def calculate_mnutric(nratendimento):
     }
 
 @app_nutritional.route("/nutritional/patients/<int:nratendimento>", methods=["GET"])
-# @api_endpoint()
+@api_endpoint()
 def list_patients_with_campo1(nratendimento):
     return nutritional_patient_service.get_patients_by_nra(nratendimento)
 

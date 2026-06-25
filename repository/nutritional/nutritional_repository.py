@@ -92,6 +92,7 @@ def save_manual_mnutric(admission_number: int, mnutric: dict):
     screening.mn_dias = mnutric["daysUTI"]
     screening.mn_total = mnutric["total"]
     screening.classificacao = mnutric["classify"]
+    screening.calculado_at = func.now()
 
     db.session.flush()
 

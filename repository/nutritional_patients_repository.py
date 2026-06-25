@@ -179,6 +179,17 @@ def get_patients(setor=None, ala=None):
         .scalar_subquery()
     ).label("mnutric_data")
 
+    # triagem_at — first finalization timestamp stamped by the triage job (US-BE-25).
+    # The dedicated column is the single source of truth; the listing must read it
+    # instead of recomputing from calculado_at/created_at.
+    triagem_at_subq = (
+        db.session.query(func.min(NutritionalScreening.triagem_at))
+        .filter(NutritionalScreening.nratendimento == Patient.admissionNumber)
+        .filter(NutritionalScreening.triagem_at.isnot(None))
+        .correlate(Patient)
+        .scalar_subquery()
+    ).label("triagem_finalizada_at")
+
     conduta_subq = (
         db.session.query(NutritionalAssessment.conduta)
         .filter(NutritionalAssessment.nratendimento == Patient.admissionNumber)
@@ -266,6 +277,7 @@ def get_patients(setor=None, ala=None):
             glim_etiol_subq,
             nrs_data_subq,
             mnutric_data_subq,
+            triagem_at_subq,
             conduta_subq,
             hist_agg_subq,
             inst_subq,
