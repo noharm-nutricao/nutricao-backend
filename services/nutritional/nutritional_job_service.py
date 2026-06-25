@@ -12,6 +12,7 @@ import logging
 import os
 import threading
 import time
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 from config import Config
@@ -89,12 +90,30 @@ def _recalculate_schema(schema: str) -> tuple:
                     schema,
                 )
 
-            nutritional_nrs_service.recalculate_nrs(patient_ns, is_icu=patient_is_icu)
-            logger.info(
-                "NRS-2002 recalculado nratendimento=%s schema=%s",
-                patient.nratendimento,
-                schema,
+            result_nrs, triagem = nutritional_nrs_service.recalculate_nrs(
+                patient_ns, is_icu=patient_is_icu
             )
+
+            if result_nrs and result_nrs.nrs_completo:
+                if not triagem.triagem_at:
+                    triagem.triagem_at = datetime.now(timezone.utc)
+                    logger.info(
+                        "Triagem finalizada nratendimento=%s schema=%s",
+                        patient.nratendimento,
+                        schema,
+                    )
+                else:
+                    logger.info(
+                        "Monitoramento nratendimento=%s schema=%s",
+                        patient.nratendimento,
+                        schema,
+                    )
+            else:
+                logger.info(
+                    "NRS incompleto nratendimento=%s schema=%s",
+                    patient.nratendimento,
+                    schema,
+                )
 
             # Campo 3 alerts — isolated so failures never revert NRS/mNUTRIC commit
             try:
