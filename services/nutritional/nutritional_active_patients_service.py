@@ -20,17 +20,19 @@ def _to_iso_datetime(value):
 def _calc_triagem_status(data_internacao, finalizada, dados_incompletos, now):
     if finalizada:
         return "finalizada"
+    if data_internacao is None:
+        return "em_andamento" if dados_incompletos else "pendente"
+
+    dt = data_internacao
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+
+    overdue = (now - dt).total_seconds() > 86400
+
+    if overdue:
+        return "atrasada"
     if dados_incompletos:
         return "em_andamento"
-    if data_internacao is None:
-        return "pendente"
-
-    if data_internacao.tzinfo is None:
-        data_internacao = data_internacao.replace(tzinfo=timezone.utc)
-
-    if (now - data_internacao).total_seconds() > 86400:
-        return "atrasada"
-
     return "pendente"
 
 
