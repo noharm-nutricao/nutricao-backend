@@ -302,6 +302,7 @@ def get_patients(setor=None, ala=None):
             & (Department.idHospital == Patient.idHospital),
         )
         .filter(Patient.dischargeDate.is_(None))
+        .filter(Patient.idDepartment.isnot(None))
     )
 
     sev_order = case(
@@ -344,7 +345,7 @@ def get_patients(setor=None, ala=None):
             )
 
         else:
-            query = query.filter(Segment.type.is_(None))
+            query = query.filter(Segment.description.ilike(f"%{ala}%"))
 
     query = query.order_by(
         sev_order,
