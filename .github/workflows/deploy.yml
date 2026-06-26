@@ -75,6 +75,15 @@ jobs:
 
           echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
 
+      - name: Validar image_uri gerada
+        run: |
+          if [ -z "${{ steps.build_and_push.outputs.image_uri }}" ]; then
+            echo "Build nao produziu image_uri."
+            exit 1
+          fi
+
+          echo "image_uri=${{ steps.build_and_push.outputs.image_uri }}"
+
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -151,6 +160,11 @@ jobs:
       - name: Criar ou atualizar Lambda com Terraform
         working-directory: infra
         run: |
+          if [ -z "${{ needs.build.outputs.image_uri }}" ]; then
+            echo "Output image_uri do job build veio vazio."
+            exit 1
+          fi
+
           terraform apply -auto-approve \
             -var="aws_region=${{ secrets.AWS_REGION }}" \
             -var="project_name=${{ env.PROJECT_NAME }}" \

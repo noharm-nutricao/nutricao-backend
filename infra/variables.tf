@@ -10,6 +10,11 @@ variable "project_name" {
 
 variable "image_uri" {
   type = string
+
+  validation {
+    condition     = length(trimspace(var.image_uri)) > 0
+    error_message = "image_uri must not be empty."
+  }
 }
 
 variable "db_host" {
