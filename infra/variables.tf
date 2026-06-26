@@ -28,3 +28,18 @@ variable "db_password" {
   type      = string
   sensitive = true
 }
+
+variable "api_key" {
+  type      = string
+  sensitive = true
+}
+
+variable "enable_nutritional_job_schedule" {
+  type    = bool
+  default = true
+}
+
+variable "nutritional_job_schedule_expression" {
+  type    = string
+  default = "rate(3 minutes)"
+}

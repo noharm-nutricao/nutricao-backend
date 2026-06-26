@@ -1,10 +1,8 @@
-name: build-validation.yml
+name: Validation
 
 on:
-  push:
-    branches: [develop]
   pull_request:
-    branches: [develop]
+    branches: [develop, main]
 
 permissions:
   contents: read
