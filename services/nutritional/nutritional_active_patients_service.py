@@ -71,7 +71,11 @@ def build_patients_payload(rows, now=None):
         glim_etiol = row.glim_etiol if row.glim_etiol else []
 
         campo1 = _build_campo1(protocolo, row)
-        dados_incompletos = bool(campo1 and campo1.get("dados_incompletos"))
+        if protocolo == "NRS2002":
+            nrs = row.nrs_data or {}
+            dados_incompletos = bool(campo1 and nrs.get("nrs_nut") is None)
+        else:
+            dados_incompletos = bool(campo1 and campo1.get("dados_incompletos"))
         finalizada = row.triagem_finalizada_at is not None
         triagem_at = _to_iso_datetime(row.triagem_finalizada_at)
 
@@ -185,10 +189,11 @@ def _build_campo1(protocolo, row):
     mn = row.mnutric_data or {}
     nrs_dict = None
     if nrs and nrs.get("nrs_total") is not None:
+        nrs_nut = nrs.get("nrs_nut")
         nrs_dict = {
             "nrs_total": nrs["nrs_total"],
             "nrs_dims": {
-                "nut": nrs.get("nrs_nut") or 0,
+                "nut": nrs_nut if nrs_nut is not None else 0,
                 "doenca": nrs.get("nrs_doenca") or 0,
                 "idade": nrs.get("nrs_idade") or 0,
             },
