@@ -166,7 +166,7 @@ def test_get_patients_without_optional_filters(monkeypatch):
     assert mocked_session.query.call_count == 18
     main_query.select_from.assert_called_once_with(Patient)
     assert main_query.outerjoin.call_count == 4
-    assert main_query.filter.call_count == 1
+    assert main_query.filter.call_count == 2
     main_query.order_by.assert_called_once()
     order_args = main_query.order_by.call_args.args
     assert len(order_args) == 7
@@ -178,6 +178,9 @@ def test_get_patients_without_optional_filters(monkeypatch):
 
     base_filter = _get_filter(main_query, 0)
     _assert_same_column(base_filter.left, Patient.dischargeDate)
+    department_filter = _get_filter(main_query, 1)
+    _assert_same_column(department_filter.left, Patient.idDepartment)
+    assert str(department_filter.right) == "NULL"
 
 
 def test_get_patients_builds_last_assessment_subquery(monkeypatch):
@@ -219,8 +222,8 @@ def test_get_patients_with_setor_applies_department_filter(monkeypatch):
 
     repo.get_patients(setor=123)
 
-    assert main_query.filter.call_count == 2
-    setor_filter = _get_filter(main_query, 1)
+    assert main_query.filter.call_count == 3
+    setor_filter = _get_filter(main_query, 2)
     _assert_same_column(setor_filter.left, Patient.idDepartment)
     assert setor_filter.right.value == 123
 
@@ -230,8 +233,8 @@ def test_get_patients_with_ala_uti_is_case_insensitive(monkeypatch):
 
     repo.get_patients(ala="uti")
 
-    assert main_query.filter.call_count == 2
-    ala_filter = _get_filter(main_query, 1)
+    assert main_query.filter.call_count == 3
+    ala_filter = _get_filter(main_query, 2)
     _assert_same_column(ala_filter.left, Segment.type)
     assert ala_filter.right.value == SegmentTypeEnum.ICU.value
 
@@ -241,8 +244,8 @@ def test_get_patients_with_ala_enfermaria_uses_not_icu_or_null(monkeypatch):
 
     repo.get_patients(ala="Enfermaria")
 
-    assert main_query.filter.call_count == 2
-    ala_filter = _get_filter(main_query, 1)
+    assert main_query.filter.call_count == 3
+    ala_filter = _get_filter(main_query, 2)
     clauses = list(ala_filter.clauses)
     assert len(clauses) == 2
 
@@ -258,10 +261,10 @@ def test_get_patients_with_unknown_ala_filters_only_null_segment(monkeypatch):
 
     repo.get_patients(ala="CLINICA")
 
-    assert main_query.filter.call_count == 2
-    ala_filter = _get_filter(main_query, 1)
-    _assert_same_column(ala_filter.left, Segment.type)
-    assert str(ala_filter.right) == "NULL"
+    assert main_query.filter.call_count == 3
+    ala_filter = _get_filter(main_query, 2)
+    _assert_same_column(ala_filter.left, Segment.description)
+    assert ala_filter.right.value == "%CLINICA%"
 
 
 def test_get_patients_with_setor_and_ala_applies_both_filters(monkeypatch):
@@ -269,10 +272,10 @@ def test_get_patients_with_setor_and_ala_applies_both_filters(monkeypatch):
 
     repo.get_patients(setor=77, ala="UTI")
 
-    assert main_query.filter.call_count == 3
+    assert main_query.filter.call_count == 4
 
-    setor_filter = _get_filter(main_query, 1)
-    ala_filter = _get_filter(main_query, 2)
+    setor_filter = _get_filter(main_query, 2)
+    ala_filter = _get_filter(main_query, 3)
 
     _assert_same_column(setor_filter.left, Patient.idDepartment)
     assert setor_filter.right.value == 77
