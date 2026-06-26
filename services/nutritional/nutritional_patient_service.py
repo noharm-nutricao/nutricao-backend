@@ -6,10 +6,12 @@ from models.main import User
 from models.prescription import Patient
 from exception.validation_error import ValidationError
 from models.main import db
+from repository import nutritional_patients_repository
 from models.nutritional import NutritionalAssessment, NutritionalD7, NutritionalGlim
 from models.requests.nutritional_glim_request import diagnostico_to_api
 from repository.nutritional import nutritional_repository
 from security.permission import Permission
+from services.nutritional import nutritional_active_patients_service
 import logging
 
 from utils import status
@@ -309,7 +311,10 @@ def save_glim(nratendimento: int, data, idusuario: int):
     if not patient:
         raise ValidationError("Paciente não encontrado", "errors.notFound", status.HTTP_404_NOT_FOUND)
 
-    _validate_glim_required(data)
+    has_malnutrition = data.diagnostico_db != "nd"
+
+    if has_malnutrition:
+        _validate_glim_required(data)
 
     glim = nutritional_repository.upsert_glim(
         nratendimento=nratendimento,
@@ -322,7 +327,7 @@ def save_glim(nratendimento: int, data, idusuario: int):
 
     d7 = None
     d7_criado = False
-    if data.diagnostico_db != "nd":
+    if has_malnutrition:
         d7 = nutritional_repository.upsert_d7(
             nratendimento=nratendimento,
             idusuario=idusuario,
@@ -353,19 +358,15 @@ def get_glim(nratendimento: int):
     return _glim_to_dict(glim)
 
 
+@has_permission(Permission.READ_PRESCRIPTION)
 def get_patients_by_nra(nratendimento: int):
     """
     Busca pacientes pelo nratendimento filtrando na service.
     """
     try:
-        data = nutritional_repository.get_patients_repository()
-
-        # filtro
-        filtered = [
-            p for p in data if p["id"] == nratendimento
-        ]
-
-        return filtered
+        rows = nutritional_patients_repository.get_patients()
+        data = nutritional_active_patients_service.build_patients_payload(rows=rows)
+        return [p for p in data if p["id"] == nratendimento]
 
     except Exception as e:
         logging.error(f"Erro ao buscar pacientes no repositório: {str(e)}")

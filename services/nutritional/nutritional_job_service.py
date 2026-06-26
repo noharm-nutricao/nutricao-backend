@@ -12,6 +12,7 @@ import logging
 import os
 import threading
 import time
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 from config import Config
@@ -19,9 +20,13 @@ from models.main import User, db, dbSession
 from repository.nutritional import nutritional_repository
 from repository.nutritional.nutritional_nrs_repository import get_patient_department
 from services.nutritional import nutritional_nrs_service, nutritional_patient_service
+from services.nutritional.nutritional_clin_rx_service import nutritional_alert_engine
+from services.nutritional.nutritional_lab_alert_service import process_lab_pending_alerts
 from services.nutritional.nutritional_nrs_service import is_uti_wrapper
 
 logger = logging.getLogger("noharm.nutritional")
+
+_last_run: dict = {"at": None, "processed": 0, "errors": 0, "duration_ms": 0}
 
 
 def _get_active_schemas() -> list:
@@ -85,12 +90,47 @@ def _recalculate_schema(schema: str) -> tuple:
                     schema,
                 )
 
-            nutritional_nrs_service.recalculate_nrs(patient_ns, is_icu=patient_is_icu)
-            logger.info(
-                "NRS-2002 recalculado nratendimento=%s schema=%s",
-                patient.nratendimento,
-                schema,
+            result_nrs, triagem = nutritional_nrs_service.recalculate_nrs(
+                patient_ns, is_icu=patient_is_icu
             )
+
+            if result_nrs and result_nrs.nrs_completo:
+                if not triagem.triagem_at:
+                    triagem.triagem_at = datetime.now(timezone.utc)
+                    logger.info(
+                        "Triagem finalizada nratendimento=%s schema=%s",
+                        patient.nratendimento,
+                        schema,
+                    )
+                else:
+                    logger.info(
+                        "Monitoramento nratendimento=%s schema=%s",
+                        patient.nratendimento,
+                        schema,
+                    )
+            else:
+                logger.info(
+                    "NRS incompleto nratendimento=%s schema=%s",
+                    patient.nratendimento,
+                    schema,
+                )
+
+            # Campo 3 alerts — isolated so failures never revert NRS/mNUTRIC commit
+            try:
+                nutritional_alert_engine()
+                process_lab_pending_alerts()
+                logger.info(
+                    "Alertas Campo 3 processados nratendimento=%s schema=%s",
+                    patient.nratendimento,
+                    schema,
+                )
+            except Exception as trigger_err:
+                logger.warning(
+                    "Falha alertas nratendimento=%s schema=%s: %s",
+                    patient.nratendimento,
+                    schema,
+                    trigger_err,
+                )
 
             db.session.commit()
             processed += 1
@@ -124,6 +164,10 @@ def recalculate_nutritional_scores(app):
     Args:
         app: Flask application instance.
     """
+    global _last_run
+
+    start = time.monotonic()
+
     with app.app_context():
         schemas = _get_active_schemas()
         logger.info(
@@ -143,10 +187,20 @@ def recalculate_nutritional_scores(app):
                     "Erro inesperado no schema=%s: %s", schema, e, exc_info=True
                 )
 
+        duration_ms = round((time.monotonic() - start) * 1000)
+
+        _last_run = {
+            "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "processed": total_processed,
+            "errors": total_errors,
+            "duration_ms": duration_ms,
+        }
+
         logger.info(
-            "Recalculo concluido. Total processados: %d, Total erros: %d",
+            "Recalculo concluido. Total processados: %d, Total erros: %d, Duracao: %dms",
             total_processed,
             total_errors,
+            duration_ms,
         )
 
 

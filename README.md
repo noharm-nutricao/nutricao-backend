@@ -44,3 +44,5 @@ For error such as:
 $ sudo apt install libpq-dev
 $ pip install psycopg2
 ```
+
+add nitra

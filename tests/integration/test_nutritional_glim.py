@@ -239,6 +239,26 @@ def test_post_glim_sem_desnutricao_does_not_create_d7(client, analyst_headers):
     assert _count_active_d7_rows() == 0
 
 
+def test_post_glim_sem_desnutricao_accepts_empty_criteria(client, analyst_headers):
+    _cleanup_glim()
+    payload = _payload(diagnostico="sem_desnutricao", fenotipos=[], etiologias=[])
+
+    response = client.post(_ENDPOINT, json=payload, headers=analyst_headers)
+
+    assert response.status_code == 200
+    data = response.get_json()["data"]
+    assert data["fenotipos"] == []
+    assert data["etiologias"] == []
+    assert data["d7_criado"] is False
+
+    session.expire_all()
+    row = _get_glim_row()
+    assert row.diagnostico == "nd"
+    assert row.fenotipos == []
+    assert row.etiologias == []
+    assert _count_active_d7_rows() == 0
+
+
 def test_post_glim_requires_fenotipo(client, analyst_headers):
     _cleanup_glim()
     payload = _payload(fenotipos=[])

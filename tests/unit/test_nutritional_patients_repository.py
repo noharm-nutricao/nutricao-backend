@@ -90,6 +90,7 @@ def _setup_session(monkeypatch, rows):
         _make_subquery_builder(literal(None)),  # glim_etiol_subq
         _make_subquery_builder(literal(None)),  # nrs_data_subq
         _make_subquery_builder(literal(None)),  # mnutric_data_subq
+        _make_subquery_builder(literal(None)),  # triagem_at_subq
         _make_subquery_builder(literal(None)),  # conduta_subq
         hist_inner_query,                        # hist_inner
         _make_hist_agg_builder(literal(None)),   # hist_agg_subq
@@ -120,6 +121,7 @@ def _setup_session_with_sev_subq(monkeypatch, rows):
         _make_subquery_builder(literal(None)),  # glim_etiol_subq
         _make_subquery_builder(literal(None)),  # nrs_data_subq
         _make_subquery_builder(literal(None)),  # mnutric_data_subq
+        _make_subquery_builder(literal(None)),  # triagem_at_subq
         _make_subquery_builder(literal(None)),  # conduta_subq
         hist_inner_query,                        # hist_inner
         _make_hist_agg_builder(literal(None)),   # hist_agg_subq
@@ -155,7 +157,7 @@ def test_get_patients_without_optional_filters(monkeypatch):
     result = repo.get_patients()
 
     assert result == rows
-    assert mocked_session.query.call_count == 15
+    assert mocked_session.query.call_count == 16
     main_query.select_from.assert_called_once_with(Patient)
     assert main_query.outerjoin.call_count == 4
     assert main_query.filter.call_count == 1
