@@ -6,10 +6,16 @@ from models.main import User
 from models.prescription import Patient
 from exception.validation_error import ValidationError
 from models.main import db
+from repository import nutritional_patients_repository
 from models.nutritional import NutritionalAssessment, NutritionalD7, NutritionalGlim
 from models.requests.nutritional_glim_request import diagnostico_to_api
 from repository.nutritional import nutritional_repository
+from repository import patient_repository
+from repository.nutritional.nutritional_nrs_repository import upsert_nrs_component_a
 from security.permission import Permission
+from services import patient_service
+from services.nutritional import nutritional_active_patients_service
+from services.nutritional.nutritional_nrs_service import recalculate_nrs
 import logging
 
 from utils import status
@@ -309,7 +315,10 @@ def save_glim(nratendimento: int, data, idusuario: int):
     if not patient:
         raise ValidationError("Paciente não encontrado", "errors.notFound", status.HTTP_404_NOT_FOUND)
 
-    _validate_glim_required(data)
+    has_malnutrition = data.diagnostico_db != "nd"
+
+    if has_malnutrition:
+        _validate_glim_required(data)
 
     glim = nutritional_repository.upsert_glim(
         nratendimento=nratendimento,
@@ -322,7 +331,7 @@ def save_glim(nratendimento: int, data, idusuario: int):
 
     d7 = None
     d7_criado = False
-    if data.diagnostico_db != "nd":
+    if has_malnutrition:
         d7 = nutritional_repository.upsert_d7(
             nratendimento=nratendimento,
             idusuario=idusuario,
@@ -353,19 +362,15 @@ def get_glim(nratendimento: int):
     return _glim_to_dict(glim)
 
 
+@has_permission(Permission.READ_PRESCRIPTION)
 def get_patients_by_nra(nratendimento: int):
     """
     Busca pacientes pelo nratendimento filtrando na service.
     """
     try:
-        data = nutritional_repository.get_patients_repository()
-
-        # filtro
-        filtered = [
-            p for p in data if p["id"] == nratendimento
-        ]
-
-        return filtered
+        rows = nutritional_patients_repository.get_patients()
+        data = nutritional_active_patients_service.build_patients_payload(rows=rows)
+        return [p for p in data if p["id"] == nratendimento]
 
     except Exception as e:
         logging.error(f"Erro ao buscar pacientes no repositório: {str(e)}")
@@ -473,3 +478,38 @@ def _handle_d7_closure(nratendimento: int, prox_visita: str, idusuario: int):
             dt_prevista=dt_prevista,
             idusuario=idusuario
         )
+
+
+@has_permission(Permission.WRITE_NUTRITIONAL)
+def save_nrs_component_a(nratendimento: int, nut: int, user_permissions):
+    if nut not in (0, 1, 2, 3):
+        raise ValidationError(
+            "nut deve ser 0, 1, 2 ou 3",
+            "errors.invalidParam",
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    row = patient_repository.get_patient_mnutric(admissionNumber=nratendimento)
+    if row is None:
+        raise ValidationError(
+            "Paciente não encontrado",
+            "errors.notFound",
+            status.HTTP_404_NOT_FOUND,
+        )
+    patient = Patient()
+    patient.admissionNumber = row.admissionNumber
+    patient.birthdate = row.birthdate
+    patient.id_icd = row.id_icd or ""
+
+    upsert_nrs_component_a(nratendimento, nut)
+    nrs_score, _ = recalculate_nrs(patient, is_icu=False)
+    db.session.commit()
+
+    return {
+        "nrs_nut": nrs_score.nrs_nut,
+        "nrs_doenca": nrs_score.nrs_doenca,
+        "nrs_idade": nrs_score.nrs_idade,
+        "nrs_total": nrs_score.nrs_total,
+        "classificacao": nrs_score.classificacao,
+        "nrs_completo": nrs_score.nrs_completo,
+    }

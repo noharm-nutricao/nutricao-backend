@@ -11,37 +11,50 @@ from repository.nutritional import nutritional_repository
 log = logging.getLogger(__name__)
 
 
-@has_permission(Permission.READ_PRESCRIPTION)
-def get_patients(request_data: NutritionalPatientsRequest):
-    """Return active admissions with basic patient data for the nutrition module."""
+def _to_iso_datetime(value):
+    if value is None:
+        return None
+    return value.isoformat()
 
-    rows = nutritional_patients_repository.get_patients(
-        setor=request_data.setor,
-        ala=request_data.ala,
-    )
 
-    log.info("Repository returned %s patients", len(rows))
+def _calc_triagem_status(data_internacao, finalizada, dados_incompletos, now):
+    if finalizada:
+        return "finalizada"
+    if data_internacao is None:
+        return "em_andamento" if dados_incompletos else "pendente"
+
+    dt = data_internacao
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+
+    overdue = (now - dt).total_seconds() > 86400
+
+    if overdue:
+        return "atrasada"
+    if dados_incompletos:
+        return "em_andamento"
+    return "pendente"
+
+
+def build_patients_payload(rows, now=None):
+    if now is None:
+        now = datetime.now(timezone.utc)
 
     patients = []
-    now = datetime.now(timezone.utc)
 
     for idx, row in enumerate(rows, start=1):
         log.info("Processing patient idx=%s | id=%s", idx, row.id)
 
-        # Derive protocolo from segment type
         protocolo = "MNUTRIC" if row.tp_segmento == SegmentTypeEnum.ICU.value else "NRS2002"
 
-        # Calculate idade (age in complete years)
         idade = _calculate_age(row.dtnascimento, now) if row.dtnascimento else None
         if idade is None:
             log.info("Missing birthdate for patient id=%s", row.id)
 
-        # Calculate dias (days of admission)
         dias = _calculate_days(row.dtinternacao, now) if row.dtinternacao else None
         if dias is None:
             log.info("Missing admission date for patient id=%s", row.id)
 
-        # Calculate IMC (BMI): peso in kg, altura in cm
         imc = _calculate_imc(row.peso, row.altura)
         if imc is None:
             log.info(
@@ -51,21 +64,22 @@ def get_patients(request_data: NutritionalPatientsRequest):
                 row.altura,
             )
 
-        # haval: round to 1 decimal place if not None
         haval = round(row.haval, 1) if row.haval is not None else None
-
-        # d7: ensure boolean
         d7 = bool(row.d7) if row.d7 is not None else False
-
-        # sev: default to "bx" in Sprint 0
         sev = row.sev if row.sev else "bx"
-
         freq_horas = row.freq_horas
-
-        # GLIM fields
         glim_diag = row.glim_diag if row.glim_diag else None
         glim_fen = row.glim_fen if row.glim_fen else []
         glim_etiol = row.glim_etiol if row.glim_etiol else []
+
+        campo1 = _build_campo1(protocolo, row)
+        if protocolo == "NRS2002":
+            nrs = row.nrs_data or {}
+            dados_incompletos = bool(campo1 and nrs.get("nrs_nut") is None)
+        else:
+            dados_incompletos = bool(campo1 and campo1.get("dados_incompletos"))
+        finalizada = row.triagem_finalizada_at is not None
+        triagem_at = _to_iso_datetime(row.triagem_finalizada_at)
 
         patients.append(
             {
@@ -79,11 +93,11 @@ def get_patients(request_data: NutritionalPatientsRequest):
                 "dias": dias,
                 "peso": row.peso,
                 "imc": imc,
-                "dieta": None,  # from demo.presmed - not implemented in this US
-                "npo": None,  # from demo.presmed - not implemented in this US
-                "alergia": None,  # from demo.pessoa - not implemented in this US
-                "al_ok": True,  # default: true when alergia is null
-                "campo1": _build_campo1(protocolo, row),
+                "dieta": None,
+                "npo": None,
+                "alergia": None,
+                "al_ok": True,
+                "campo1": campo1,
                 "glim_diag": glim_diag,
                 "glim_fen": glim_fen,
                 "glim_etiol": glim_etiol,
@@ -91,12 +105,36 @@ def get_patients(request_data: NutritionalPatientsRequest):
                 "conduta": row.conduta,
                 "haval": haval,
                 "d7": d7,
-                "pri": idx,  # position in the priority queue
+                "pri": idx,
                 "sev": sev,
                 "freq_horas": freq_horas,
                 "hist": row.hist if row.hist else [],
+                "data_internacao": _to_iso_datetime(row.dtinternacao),
+                "triagem_at": triagem_at,
+                "triagem_status": _calc_triagem_status(
+                    data_internacao=row.dtinternacao,
+                    finalizada=finalizada,
+                    dados_incompletos=dados_incompletos,
+                    now=now,
+                ),
             }
         )
+
+    return patients
+
+
+@has_permission(Permission.READ_PRESCRIPTION)
+def get_patients(request_data: NutritionalPatientsRequest):
+    """Return active admissions with basic patient data for the nutrition module."""
+
+    rows = nutritional_patients_repository.get_patients(
+        setor=request_data.setor,
+        ala=request_data.ala,
+    )
+
+    log.info("Repository returned %s patients", len(rows))
+
+    patients = build_patients_payload(rows=rows)
 
     log.info("Finished get_patients | total_processed=%s", len(patients))
 
@@ -151,12 +189,13 @@ def _build_campo1(protocolo, row):
         return None
     nrs = row.nrs_data or {}
     mn = row.mnutric_data or {}
-    nrs_dict: Optional[dict] = None
+    nrs_dict = None
     if nrs and nrs.get("nrs_total") is not None:
+        nrs_nut = nrs.get("nrs_nut")
         nrs_dict = {
             "nrs_total": nrs["nrs_total"],
             "nrs_dims": {
-                "nut": nrs.get("nrs_nut") or 0,
+                "nut": nrs_nut if nrs_nut is not None else 0,
                 "doenca": nrs.get("nrs_doenca") or 0,
                 "idade": nrs.get("nrs_idade") or 0,
             },

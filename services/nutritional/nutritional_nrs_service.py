@@ -1,5 +1,6 @@
 from datetime import datetime
 import re
+
 from typing import Any, Callable, Optional
 import unicodedata
 from models.enums import SegmentTypeEnum
@@ -185,7 +186,7 @@ def __recalculate_nrs(
     score_nrs_component_b_fn: Callable[[bool, str], int] = score_nrs_component_b,
     calc_age_fn: Callable[[datetime], int] = calculate_age,
     now_fn: Callable[[], datetime] = datetime.now
-) -> None:
+) -> tuple[NrsScoreDTO, NutritionalScreening]:
     triagem: NutritionalScreening = get_or_create_triagem_fn(patient.admissionNumber)
     nrs_row: Optional[NutritionalNrs] = nutritional_nrs_repo_fn(patient.admissionNumber)
     nrs_score_dto: NrsScoreDTO = build_nrs_update(
@@ -202,9 +203,10 @@ def __recalculate_nrs(
         triagem,
         nrs_score_dto,
     )
-    return None
+    return nrs_score_dto, triagem
 
 
-def recalculate_nrs(patient: Patient, is_icu: bool) -> None:
-    __recalculate_nrs(patient, is_icu)
-    return None
+def recalculate_nrs(
+    patient: Patient, is_icu: bool
+) -> tuple[NrsScoreDTO, NutritionalScreening]:
+    return __recalculate_nrs(patient, is_icu)

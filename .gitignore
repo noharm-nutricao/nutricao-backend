@@ -106,6 +106,9 @@ env3-11/
 
 # mypy
 .mypy_cache/
+.terraform/
+infra/*.tfvars
+infra/*.tfvars.json
 data/prescriptions_sample.csv.gz
 apienv/
 upload/*

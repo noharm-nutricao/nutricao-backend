@@ -13,3 +13,7 @@ output "lambda_alias_name" {
 output "function_url" {
   value = aws_lambda_function_url.app_url.function_url
 }
+
+output "nutritional_job_endpoint" {
+  value = local.nutritional_job_endpoint
+}

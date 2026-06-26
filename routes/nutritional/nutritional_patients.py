@@ -59,7 +59,7 @@ def calculate_mnutric(nratendimento):
     }
 
 @app_nutritional.route("/nutritional/patients/<int:nratendimento>", methods=["GET"])
-# @api_endpoint()
+@api_endpoint()
 def list_patients_with_campo1(nratendimento):
     return nutritional_patient_service.get_patients_by_nra(nratendimento)
 
@@ -139,3 +139,12 @@ def get_d7(nratendimento):
 @api_endpoint()
 def close_d7(nratendimento, id):
     return nutritional_patient_service.close_d7(nratendimento=nratendimento, id=id)
+
+
+@app_nutritional.route(
+    "/nutritional/patients/<int:nratendimento>/nrs-a", methods=["PUT"]
+)
+@api_endpoint()
+def save_nrs_component_a(nratendimento: int):
+    nut = (request.get_json(silent=True) or {}).get("nut")
+    return nutritional_patient_service.save_nrs_component_a(nratendimento, nut)
