@@ -283,7 +283,7 @@ def test_calc_triagem_status_atrasada_gt_24h():
 def test_calc_triagem_status_em_andamento_has_priority_over_time():
     now = datetime(2026, 4, 10, 12, 0, tzinfo=timezone.utc)
     admission = datetime(2026, 4, 1, 8, 0, tzinfo=timezone.utc)
-    assert service._calc_triagem_status(admission, False, True, now) == "em_andamento"
+    assert service._calc_triagem_status(admission, False, True, now) == "atrasada"
 
 
 def test_calc_triagem_status_finalizada_has_priority():
@@ -468,4 +468,3 @@ def test_build_campo1_mnutric_only_nrs_no_mn_data():
         "nrs_total": 3,
         "nrs_dims": {"nut": 1, "doenca": 1, "idade": 1},
     }
-

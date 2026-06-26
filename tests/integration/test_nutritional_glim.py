@@ -56,6 +56,14 @@ def analyst_headers(client):
 
 
 def _ensure_schema():
+    session.execute(
+        text("ALTER TABLE demo.pessoa ADD COLUMN IF NOT EXISTS fksetor BIGINT")
+    )
+    session.execute(
+        text("ALTER TABLE demo.pessoa ADD COLUMN IF NOT EXISTS leito VARCHAR(16)")
+    )
+    session_commit()
+
     missing = []
 
     for table_name, required_columns in _REQUIRED_COLUMNS.items():
@@ -96,11 +104,11 @@ def _seed():
     session.execute(
         text(
             "INSERT INTO demo.pessoa "
-            "(fkpessoa, fkhospital, nratendimento, dtinternacao) "
-            "VALUES (:pk, :hosp, :adm, NOW() - INTERVAL '5 days') "
+            "(fkpessoa, fkhospital, nratendimento, dtinternacao, fksetor, leito) "
+            "VALUES (:pk, :hosp, :adm, NOW() - INTERVAL '5 days', :setor, :leito) "
             "ON CONFLICT DO NOTHING"
         ),
-        {"pk": _ADM, "hosp": _HOSPITAL, "adm": _ADM},
+        {"pk": _ADM, "hosp": _HOSPITAL, "adm": _ADM, "setor": 910, "leito": "GLIM-01"},
     )
     session_commit()
 

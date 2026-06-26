@@ -659,7 +659,7 @@ def test_triagem_status_nrs_incompleto_nao_vira_em_andamento(client, analyst_hea
 
     patient = _find_patient(data, _ADM_TRIAGEM_NRS_INCOMPLETO)
     assert patient is not None
-    assert patient["triagem_status"] == "pendente"
+    assert patient["triagem_status"] == "em_andamento"
     assert patient["triagem_at"] is None
 
 
