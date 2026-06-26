@@ -17,8 +17,6 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    outputs:
-      image_uri: ${{ steps.build_and_push.outputs.image_uri }}
 
     steps:
       - name: Checkout
@@ -61,7 +59,6 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build e push da imagem
-        id: build_and_push
         env:
           ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
@@ -72,17 +69,6 @@ jobs:
 
           docker build -t "$IMAGE_URI" .
           docker push "$IMAGE_URI"
-
-          echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
-
-      - name: Validar image_uri gerada
-        run: |
-          if [ -z "${{ steps.build_and_push.outputs.image_uri }}" ]; then
-            echo "Build nao produziu image_uri."
-            exit 1
-          fi
-
-          echo "image_uri=${{ steps.build_and_push.outputs.image_uri }}"
 
   test:
     name: Test
@@ -149,6 +135,26 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
+      - name: Login no ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Preparar image_uri
+        id: image
+        env:
+          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          IMAGE_URI="$ECR_REGISTRY/$PROJECT_NAME:$IMAGE_TAG"
+
+          if [ -z "$IMAGE_URI" ] || [ "$IMAGE_URI" = "/$PROJECT_NAME:$IMAGE_TAG" ]; then
+            echo "Nao foi possivel montar a image_uri para deploy."
+            exit 1
+          fi
+
+          echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+          echo "Deploy usando imagem: $IMAGE_URI"
+
       - name: Terraform init
         working-directory: infra
         run: |
@@ -160,15 +166,10 @@ jobs:
       - name: Criar ou atualizar Lambda com Terraform
         working-directory: infra
         run: |
-          if [ -z "${{ needs.build.outputs.image_uri }}" ]; then
-            echo "Output image_uri do job build veio vazio."
-            exit 1
-          fi
-
           terraform apply -auto-approve \
             -var="aws_region=${{ secrets.AWS_REGION }}" \
             -var="project_name=${{ env.PROJECT_NAME }}" \
-            -var="image_uri=${{ needs.build.outputs.image_uri }}" \
+            -var="image_uri=${{ steps.image.outputs.image_uri }}" \
             -var="db_host=${{ secrets.DB_HOST }}" \
             -var="db_name=${{ secrets.DB_NAME }}" \
             -var="db_user=${{ secrets.DB_USER }}" \
