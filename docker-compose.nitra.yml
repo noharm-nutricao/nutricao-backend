@@ -66,6 +66,11 @@ services:
       psql -h db -U postgres -d noharm -f /sql/migrations/flyway/V4__seed_data.sql &&
       psql -h db -U postgres -d noharm -f /sql/migrations/flyway/V5__nitra_test_seed.sql &&
       psql -h db -U postgres -d noharm -f /sql/migrations/flyway/V6__create_alert_utils.sql &&
+      psql -h db -U postgres -d noharm -f /sql/migrations/flyway/V7__seed_campo3_alerts.sql &&
+      psql -h db -U postgres -d noharm -f /sql/migrations/flyway/V8__fix_trigger_presmed_aux_alerta.sql &&
+      psql -h db -U postgres -d noharm -f /sql/migrations/flyway/V9__add_triagem_at.sql &&
+      psql -h db -U postgres -d noharm -f /sql/migrations/flyway/V10__seed_nrs_uti.sql &&
+      psql -h db -U postgres -d noharm -f /sql/migrations/flyway/V11__seed_ala_b_triagem_states.sql &&
       psql -h db -U postgres -d noharm -f /sql/migrations/flyway/R__users_permissions.sql
       "
 

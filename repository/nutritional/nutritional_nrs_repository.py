@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Optional
 
@@ -11,6 +12,28 @@ from models.prescription import Prescription
 from models.nutritional import NutritionalNrs, NutritionalScreening
 from models.segment import Segment
 from services.nutritional.nutritional_dtos import CidMappings, NrsScoreDTO
+
+
+def upsert_nrs_component_a(nratendimento: int, nut: int) -> NutritionalNrs:
+    """Persist NRS Component A (nutritional impairment score 0-3) for an admission."""
+    row = _get_nrs_assessment(db.session, nratendimento)
+    if row is None:
+        now = datetime.now(timezone.utc)
+        row = NutritionalNrs(
+            nratendimento=nratendimento,
+            score_gravidade=0,
+            idade_maior_70=False,
+            created_at=now,
+            updated_at=now,
+        )
+        db.session.add(row)
+    row.score_comprometimento = nut
+    row.triagem_imc_baixo = False
+    row.triagem_perda_peso = False
+    row.triagem_ingestao_reduzida = False
+    row.triagem_doenca_grave = nut > 0
+    db.session.flush()
+    return row
 
 
 def get_nrs_assessment(nratendimento: int) -> Optional[NutritionalNrs]:
